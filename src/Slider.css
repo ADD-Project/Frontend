@@ -18,7 +18,7 @@
   width: 110%;
   height: 110%;
   background: url("/images/background.jpg") center/cover no-repeat;
-  filter: blur(3px) brightness(0.7); /* 배경이 더 잘 보이도록 블러를 대폭 줄이고 밝기를 약간 조정 */
+  filter: blur(3px) brightness(0.9); /* 배경의 어두운 정도를 줄여 원래 밝기에 가깝게 조정 */
   z-index: 0;
 }
 
@@ -41,6 +41,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 2rem;
+  box-sizing: border-box;
 }
 
 /* 슬라이드 위치 상태 */
@@ -68,8 +70,11 @@
 
 /* 텍스트 및 그리드 스타일링 */
 .year-title {
+  position: absolute;
+  top: 3rem;
+  left: 4rem;
   font-size: 4rem;
-  margin-bottom: 4rem;
+  margin: 0;
   text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.8);
 }
 
@@ -78,6 +83,16 @@
   gap: 4rem;
   flex-wrap: wrap;
   justify-content: center;
+  max-height: 70vh; /* 화면 아래로 튀어나가지 않도록 최대 높이 설정 */
+  overflow-y: auto; /* 넘치면 스크롤 생성 */
+  padding: 1rem;
+  -ms-overflow-style: none; /* IE and Edge 스크롤바 숨김 */
+  scrollbar-width: none; /* Firefox 스크롤바 숨김 */
+}
+
+/* 자동 스크롤되므로 전시용 화면에서 스크롤바 자체를 완전히 숨김 */
+.resident-list::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge 등에서 스크롤바 숨김 */
 }
 
 .resident-card {
@@ -91,13 +106,239 @@
   height: 240px; /* 3:4 비율로 증명사진 형태 적용 */
   border-radius: 12px; /* 약간 둥근 모서리 */
   object-fit: cover;
+  object-position: center 15%; /* 사람 얼굴(위쪽) 위주로 자르도록 기준점 상향 조정 */
   border: 4px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
   margin-bottom: 1.5rem;
 }
 
 .resident-name {
+  color: #ffffff;
   font-size: 1.8rem;
+  font-weight: 600; /* 가독성을 위해 글씨를 약간 더 굵게 */
+  text-shadow:
+    2px 2px 8px rgba(0, 0, 0, 1),
+    0 0 15px rgba(0, 0, 0, 0.8); /* 검은색 그림자를 더 진하고 넓게 겹쳐서 가독성 극대화 */
+}
+
+/* --- 우측 하단 플로팅 메뉴 --- */
+.floating-menu-container {
+  position: fixed;
+  bottom: 3rem;
+  right: 3rem;
+  z-index: 100; /* 슬라이더 등 다른 요소보다 무조건 위에 오도록 설정 */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(20px);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease,
+    visibility 0.3s ease;
+}
+
+.menu-items.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.menu-item {
+  background-color: rgba(0, 0, 0, 0.7);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.8rem 1.5rem;
+  border-radius: 30px;
+  font-size: 1rem;
   font-weight: 500;
-  text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.8);
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.menu-toggle-btn {
+  width: 65px;
+  height: 65px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  color: #000000;
+  border: none;
+  font-size: 1.8rem;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 0.3s ease,
+    background-color 0.3s ease;
+}
+
+.menu-toggle-btn:hover {
+  transform: scale(1.1);
+  background-color: #f0f0f0;
+}
+
+/* --- 검색 화면 스타일 --- */
+.search-wrapper {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 10rem; /* 화면 상단에서 여백 */
+  box-sizing: border-box;
+}
+
+.search-header {
+  position: relative;
+  z-index: 45; /* 가상 키보드 배경 오버레이보다 위에 위치하도록 설정 */
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+  max-width: 800px; /* 검색창 가로 최대 길이 늘림 */
+}
+
+.search-input {
+  flex: 1;
+  padding: 1rem 1.5rem;
+  font-size: 1.5rem;
+  border-radius: 30px;
+  border: none;
+  outline: none;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  font-family: inherit;
+}
+
+.search-btn {
+  padding: 1rem 2rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #fff;
+  background-color: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 30px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  font-family: inherit;
+}
+
+.search-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+/* --- 가상 키보드 외부 클릭 감지 오버레이 --- */
+.keyboard-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 40; /* 키보드(50)보단 아래, 검색창(45)보단 아래에 위치 */
+}
+
+/* --- 가상 키보드 스타일 --- */
+.virtual-keyboard {
+  position: fixed;
+  bottom: 1rem;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: 85vw; /* 양옆 여백을 늘려 가로 길이를 줄임 */
+  max-width: 1200px; /* 모니터가 매우 클 경우 너무 길어지지 않도록 최대치 제한 */
+  height: 45vh; /* 화면의 절반 정도 높이 */
+  background-color: rgba(245, 245, 250, 0.95); /* 밝은 톤의 배경으로 변경 */
+  padding: 1.5rem 1rem; /* 양옆 안쪽 여백도 살짝 줄임 */
+  border-radius: 24px; /* 모든 모서리를 둥글게 */
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2); /* 밝은 테마에 맞게 그림자 약화 */
+  box-sizing: border-box;
+  z-index: 50;
+  animation: slideUpKeyboard 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes slideUpKeyboard {
+  from {
+    transform: translateY(100%); /* 화면 완전 바깥(아래)에서부터 시작 */
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.keyboard-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.8rem;
+  flex: 1; /* 각 열이 세로 공간을 균등하게 차지하도록 설정 */
+}
+
+.key-btn {
+  background-color: #ffffff; /* 하얀색 버튼 */
+  color: #333333; /* 어두운 글씨 */
+  border: 1px solid rgba(0, 0, 0, 0.1); /* 연한 테두리 */
+  padding: 0; /* flex: 1과 height: 100%로 높이를 채우므로 패딩 제거 */
+  height: 100%;
+  border-radius: 12px;
+  font-size: 1.8rem; /* 높이에 맞게 글씨 크기 살짝 조정 */
+  font-family: inherit;
+  cursor: pointer;
+  flex: 1; /* 가로 공간을 비율에 맞게 차지하도록 */
+  max-width: 150px; /* 버튼이 화면 양옆으로 시원하게 퍼지도록 최대 너비 대폭 증가 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 0.1s ease,
+    transform 0.1s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* 밝은 테마에 맞는 부드러운 그림자 */
+}
+
+.key-btn:active {
+  background-color: #e5e7eb; /* 터치 시 눌린 느낌을 주는 연한 회색 */
+  transform: scale(0.95);
+}
+
+.key-btn.action-key {
+  background-color: #e2e4e8; /* 기능 키(지우기, 한/영 등)는 다른 색으로 구분 */
+  max-width: 220px;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+/* Shift 키가 켜져있을 때 눌려있는 느낌의 디자인 */
+.key-btn.active-shift {
+  background-color: #a0a4ab;
+  color: #ffffff;
+}
+
+.key-btn.space-key {
+  max-width: 800px;
+  flex: 4;
 }
