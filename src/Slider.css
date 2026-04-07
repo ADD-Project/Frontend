@@ -1,6 +1,8 @@
 /* 전체 화면 및 배경 설정 */
 .app-container {
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -99,6 +101,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.resident-card:hover {
+  transform: scale(1.05);
 }
 
 .resident-card img {
@@ -251,6 +259,34 @@
   transform: scale(1.05);
 }
 
+/* --- 검색 결과 스타일 --- */
+.search-results {
+  margin-top: 3rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3rem;
+  width: 100%;
+  max-width: 1200px;
+  max-height: calc(
+    100vh - 25rem
+  ); /* 검색창 등의 상단 여백 제외하고 스크롤 가능하도록 높이 제한 */
+  overflow-y: auto;
+  padding: 1rem 1rem 10rem 1rem; /* 하단 여백을 넉넉히 주어 키보드에 가려지지 않게 함 */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.search-results::-webkit-scrollbar {
+  display: none;
+}
+
+.no-result {
+  font-size: 2rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 5rem;
+}
+
 /* --- 가상 키보드 외부 클릭 감지 오버레이 --- */
 .keyboard-overlay {
   position: fixed;
@@ -341,4 +377,604 @@
 .key-btn.space-key {
   max-width: 800px;
   flex: 4;
+}
+
+/* --- PIN 입력 팝업 --- */
+.pin-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.85);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pin-modal {
+  background-color: #f5f5fa;
+  padding: 2.5rem 3.5rem;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  color: #333;
+  animation: slideUpKeyboard 0.3s ease-out;
+}
+
+.pin-modal h2 {
+  font-size: 2.2rem;
+  margin: 0 0 1rem 0;
+  color: #000;
+}
+
+.pin-modal p {
+  font-size: 1.2rem;
+  margin: 0 0 2rem 0;
+  color: #555;
+}
+
+.pin-display {
+  width: 100%;
+  padding: 1.2rem;
+  font-size: 2rem;
+  text-align: center;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  letter-spacing: 5px; /* 비밀번호 느낌 나게 글자 간격 넓힘 */
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+  min-height: 3.5rem;
+  color: #000;
+}
+
+.pin-keyboard {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.pin-key-btn {
+  width: 70px;
+  height: 70px;
+  font-size: 2rem;
+  font-family: inherit;
+  background-color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%; /* 둥근 번호 키패드 */
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  transition:
+    background-color 0.1s,
+    transform 0.1s;
+}
+
+.pin-key-btn:active {
+  background-color: #e5e7eb;
+  transform: scale(0.95);
+}
+
+.pin-key-btn.action-key {
+  font-size: 1rem; /* 글자 버튼('취소', '지우기')이 버튼 안에 잘 들어가도록 폰트 크기 축소 */
+  font-weight: 600;
+  background-color: #e2e4e8;
+  border-radius: 25px; /* 액션 버튼은 약간 다르게 */
+}
+
+.pin-confirm-btn {
+  width: 100%;
+  padding: 1.2rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: #555555; /* 검정색에서 진회색으로 변경 */
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    transform 0.1s;
+}
+
+.pin-confirm-btn:active {
+  transform: scale(0.98);
+}
+
+/* --- 상세 정보 페이지 스타일 --- */
+.detail-wrapper {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 8rem 4rem 2rem 4rem; /* 상단 여백을 약간 늘려 전체적으로 조금 내림 */
+  box-sizing: border-box;
+  overflow-y: hidden; /* 세로 스크롤 완전 제거 */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.detail-wrapper::-webkit-scrollbar {
+  display: none;
+}
+.detail-top {
+  display: flex;
+  gap: 3rem; /* 이미지와 텍스트 박스 사이 간격 추가 축소 */
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 2rem; /* 하단 부서원 리스트가 더 위로 올라오도록 여백 추가 축소 */
+}
+.detail-image {
+  width: 225px; /* 프로필 이미지 약간 확대 */
+  height: 300px;
+  border-radius: 16px;
+  object-fit: cover;
+  object-position: center 15%;
+  border: 6px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+.detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8rem; /* 텍스트 간격 약간 확대 */
+  flex: 1; /* 내용이 길어져도 영역 안에서 유연하게 줄어들도록 설정 */
+  max-width: 600px; /* 텍스트 박스가 화면 끝까지 너무 길어지지 않도록 최대 너비 제한 */
+  color: #222222; /* 배경이 밝아졌으므로 글씨를 어둡게 변경 */
+  background-color: rgba(
+    255,
+    255,
+    255,
+    0.45
+  ); /* 투명도를 높여 배경이 더 잘 비치도록 수정 (0.65 -> 0.45) */
+  padding: 2.5rem 3.5rem; /* 텍스트 박스 안쪽 여백 약간 확대 */
+  border-radius: 24px; /* 박스 모서리를 둥글게 */
+  backdrop-filter: blur(
+    10px
+  ); /* 배경 이미지를 살짝 더 흐리게 처리해 글씨 가독성 극대화 */
+  text-align: left; /* 왼쪽 정렬 */
+  align-items: flex-start; /* 내부 요소들을 왼쪽으로 밀착 */
+}
+.detail-info h2 {
+  font-size: 3.6rem; /* 이름 폰트 크기 약간 확대 */
+  margin: 0;
+  font-weight: 700;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.15); /* 선 색상도 어둡게 변경 */
+  padding-bottom: 1rem;
+  text-shadow: none; /* 하얀 바탕에 어두운 글씨이므로 그림자 제거 */
+  width: 100%; /* 왼쪽 정렬 시 밑줄이 박스 끝까지 꽉 차도록 너비 100% 설정 */
+  text-align: center; /* 이름 가운데 정렬 */
+}
+.detail-info p {
+  font-size: 1.6rem; /* 글자 크기 약간 확대 */
+  margin: 0;
+  font-weight: 400;
+  line-height: 1.5; /* 여러 줄로 넘어갈 때 위아래 글씨가 답답하게 겹치지 않도록 줄간격 추가 */
+  word-break: keep-all; /* 한글 단어 중간에서 뚝 끊기지 않게 깔끔하게 줄바꿈 */
+  overflow-wrap: break-word; /* 띄어쓰기 없는 엄청나게 긴 글자는 강제로 줄바꿈 처리 */
+}
+.detail-info p strong {
+  font-weight: 600;
+  margin-right: 1rem;
+}
+.detail-bottom {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1; /* 남은 화면 세로 높이를 모두 차지하게 설정 */
+  overflow: hidden; /* 영역 밖으로 튀어나가는 것을 막음 */
+}
+.detail-bottom h3 {
+  font-size: 2rem; /* 부서원 타이틀 크기 축소 */
+  color: #fff;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem; /* 타이틀과 부서원 목록 사이 여백 축소 */
+  text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.8);
+  text-align: left; /* 텍스트를 왼쪽 끝으로 확실하게 정렬 */
+}
+.coworker-list {
+  display: flex;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-content: flex-start; /* 아이템들이 세로로 퍼지지 않고 위에서부터 차곡차곡 쌓이도록 설정 */
+  overflow-y: auto; /* 부서원이 많아지면 이 박스 안에서만 세로 스크롤 생성 */
+  padding-bottom: 2rem; /* 맨 아랫줄 카드 그림자가 잘리지 않도록 여백 추가 */
+  -ms-overflow-style: none; /* 스크롤바 숨김 (IE, Edge) */
+  scrollbar-width: none; /* 스크롤바 숨김 (Firefox) */
+}
+/* 스크롤바 숨김 (Chrome, Safari) */
+.coworker-list::-webkit-scrollbar {
+  display: none;
+}
+.coworker-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.coworker-card img {
+  width: 120px; /* 부서원 사진 크기 축소 */
+  height: 160px;
+  border-radius: 12px;
+  object-fit: cover;
+  object-position: center 15%;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  margin-bottom: 1rem;
+}
+.coworker-name {
+  font-size: 1.4rem; /* 부서원 이름 크기 축소 */
+  color: #ffffff;
+  font-weight: 600;
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 1);
+}
+
+/* --- 관리자 페이지 스타일 --- */
+.admin-wrapper {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.admin-header {
+  position: absolute;
+  top: 3rem;
+  left: 4rem;
+  font-size: 3.5rem;
+  margin: 0;
+  color: #ffffff;
+  text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.8);
+}
+.admin-menu-container {
+  display: flex;
+  gap: 4rem; /* 버튼 사이 간격 */
+}
+.admin-menu-btn {
+  width: 220px;
+  height: 220px;
+  border-radius: 24px;
+  background-color: rgba(
+    255,
+    255,
+    255,
+    0.6
+  ); /* 투명도를 살짝 더 높임 (0.8 -> 0.6) */
+  color: #000000; /* 글자 색상을 검은색으로 변경 */
+  font-size: 2.5rem;
+  font-weight: 700;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    transform 0.2s;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  font-family: inherit;
+}
+.admin-menu-btn:hover {
+  background-color: rgba(
+    255,
+    255,
+    255,
+    1
+  ); /* 마우스를 올렸을 때 완전히 밝은 하얀색으로 변경 */
+  transform: translateY(-10px); /* 호버 시 위로 살짝 떠오름 */
+}
+.admin-menu-btn:active {
+  transform: scale(0.95); /* 클릭 시 눌리는 효과 */
+}
+
+/* --- 관리자 회원 조회 리스트 화면 --- */
+.admin-list-wrapper {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.admin-list-container {
+  width: 95%; /* 전체 너비 확대 */
+  max-width: 1600px; /* 최대 크기 확대 */
+  height: 90%; /* 세로 길이 확대 */
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  padding: 3rem 4rem;
+  box-sizing: border-box;
+}
+
+.admin-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.admin-list-header h2 {
+  font-size: 3rem;
+  margin: 0;
+  color: #222;
+}
+
+.admin-list-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.admin-delete-btn {
+  background-color: #ff4d4f;
+  color: #fff;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.admin-delete-btn:hover {
+  background-color: #ff7875;
+}
+
+.admin-list-close-btn {
+  font-size: 3rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  transition: color 0.2s;
+}
+
+.admin-list-close-btn:hover {
+  color: #000;
+}
+
+.admin-list-search {
+  display: flex;
+  margin-bottom: 2rem;
+}
+
+.admin-list-search input {
+  width: 100%;
+  max-width: 500px;
+  padding: 1.2rem 1.5rem;
+  font-size: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #ccc;
+  outline: none;
+  font-family: inherit;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.admin-list-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  color: #333;
+  font-size: 1.4rem;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 0.8rem 1rem; /* 한 페이지에 10명이 보일 수 있도록 라인 두께 대폭 축소 */
+  border-bottom: 1px solid #ddd;
+}
+
+.admin-table th {
+  font-weight: 600;
+  background-color: rgba(0, 0, 0, 0.05);
+  font-size: 1.5rem;
+}
+
+.admin-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.admin-table tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+.admin-table-empty {
+  text-align: center;
+  padding: 5rem !important;
+  color: #777;
+  font-size: 1.6rem;
+}
+
+.admin-pagination {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.admin-page-btn {
+  padding: 0.8rem 1.5rem;
+  font-size: 1.4rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #333;
+  font-family: inherit;
+  font-weight: 500;
+}
+
+.admin-page-btn.active {
+  background-color: #444;
+  color: #fff;
+  border-color: #444;
+}
+
+/* --- 관리자 회원 정보 수정 팝업 --- */
+.admin-edit-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-edit-modal {
+  background-color: #fff;
+  border-radius: 24px;
+  padding: 3rem 4rem;
+  width: 650px;
+  max-width: 90%;
+  color: #222;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-edit-modal h3 {
+  font-size: 2.5rem;
+  margin: 0 0 2rem 0;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 1rem;
+  color: #111;
+}
+
+.admin-edit-body {
+  display: flex;
+  gap: 3rem;
+  margin-bottom: 3rem;
+}
+
+.admin-edit-body img {
+  width: 160px;
+  height: 220px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid #ddd;
+}
+
+.admin-edit-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.admin-edit-form label {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: -0.8rem;
+}
+
+.admin-edit-form input {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  font-size: 1.4rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+/* --- 부서 변경 이력 리스트 스타일 --- */
+.admin-edit-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.admin-edit-history-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-history-del-btn {
+  background: none;
+  border: none;
+  color: #ff4d4f;
+  font-size: 1.6rem;
+  cursor: pointer;
+  padding: 0 0.5rem;
+}
+
+.admin-history-add-btn {
+  background-color: #f5f5f5;
+  border: 1px dashed #ccc;
+  color: #666;
+  padding: 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1.3rem;
+  transition: background-color 0.2s;
+  margin-top: 0.2rem;
+}
+.admin-history-add-btn:hover {
+  background-color: #e8e8e8;
+}
+
+.admin-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.admin-edit-actions button {
+  padding: 1.2rem 2.5rem;
+  font-size: 1.4rem;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition:
+    background-color 0.2s,
+    transform 0.1s;
+}
+
+.admin-edit-actions button:active {
+  transform: scale(0.95);
+}
+
+.admin-edit-cancel {
+  background-color: #e5e7eb;
+  color: #333;
+}
+
+.admin-edit-save {
+  background-color: #333;
+  color: #fff;
 }
