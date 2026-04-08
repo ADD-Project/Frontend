@@ -2,71 +2,13 @@ import { useState, useEffect } from "react";
 import * as Hangul from "hangul-js";
 import "./Slider.css";
 
-// 하드코딩된 임시 데이터 (이후 API 등에서 받아오는 형태로 변경 가능)
-const mockData = [
-  {
-    year: 2001,
-    residents: [
-      {
-        id: 4,
-        name: "정지원",
-        image: "/images/profile4.png",
-        pin: "1234",
-        date: "2001-03-01",
-        department: "개발팀",
-        deptHistory: [
-          "2001-03-01 입사 (개발팀)",
-          "2003-05-01 부서 이동 (보안팀)",
-        ],
-        coworkers: [{ name: "홍길동", image: "/images/profile.png" }],
-      },
-      {
-        id: 5,
-        name: "최동훈",
-        image: "/images/profile5.png",
-        pin: "1234",
-        date: "2001-05-15",
-        department: "디자인팀",
-        coworkers: [],
-      },
-    ],
-  },
-  {
-    year: 2002,
-    residents: [
-      {
-        id: 1,
-        name: "김철수",
-        image: "/images/profile1.png",
-        pin: "1234",
-        date: "2002-01-10",
-        department: "기획팀",
-        coworkers: [
-          { name: "이동료", image: "/images/profile.png" },
-          { name: "박동료", image: "/images/profile.png" },
-        ],
-      },
-      {
-        id: 2,
-        name: "이영희",
-        image: "/images/profile2.png",
-        pin: "1234",
-        date: "2002-02-15",
-        department: "인사팀",
-        coworkers: [],
-      },
-      {
-        id: 3,
-        name: "박민수",
-        image: "/images/profile3.png",
-        pin: "1234",
-        date: "2002-04-20",
-        department: "영업팀",
-        coworkers: [{ name: "김지민", image: "/images/profile.png" }],
-      },
-    ],
-  },
-];
+// 조회할 연도 리스트 생성 (1978년 ~ 현재 연도)
+const START_YEAR = 1978;
+const CURRENT_YEAR = new Date().getFullYear();
+const yearsList = Array.from(
+  { length: CURRENT_YEAR - START_YEAR + 1 },
+  (_, i) => START_YEAR + i,
+);
 
 // 가상 키보드 레이아웃
 const keyboardLayouts = {
@@ -118,6 +60,40 @@ function App() {
   const [adminCurrentPage, setAdminCurrentPage] = useState(1); // 관리자 페이지네이션
   const [adminSelectedResident, setAdminSelectedResident] = useState(null); // 관리자 화면 회원 수정 팝업용
   const [adminSelectedForDelete, setAdminSelectedForDelete] = useState([]); // 삭제하기 위해 체크된 회원 ID 배열
+  const [residentsByYear, setResidentsByYear] = useState({}); // 연도별 입소자 데이터 상태
+
+  // 컴포넌트 마운트 시 전체 연도의 데이터를 비동기로 미리 호출하여 캐싱 (검색 및 슬라이더용)
+  useEffect(() => {
+    yearsList.forEach((year) => {
+      fetch(`/api/members/admission-years/${year}`, {
+        method: "GET",
+      })
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data) {
+            // API 응답 데이터를 기존 UI 구조에 맞게 매핑
+            const mappedData = json.data.map((r) => ({
+              year: year,
+              id: r.memberId,
+              name: r.name,
+              image: r.profileImagePath || "/images/profile.png", // 이미지가 없을 때 기본 이미지로 대체
+              pin: "1234", // API에 없으면 기본값 세팅 (테스트용)
+              date: `${year}-01-01`, // API에 없으면 임시 설정
+              department: "미배정", // API에 없으면 임시 설정
+              deptHistory: [],
+              coworkers: [],
+            }));
+            setResidentsByYear((prev) => ({ ...prev, [year]: mappedData }));
+          } else {
+            setResidentsByYear((prev) => ({ ...prev, [year]: [] }));
+          }
+        })
+        .catch((err) => {
+          console.error(`${year}년 데이터 호출 에러:`, err);
+          setResidentsByYear((prev) => ({ ...prev, [year]: [] }));
+        });
+    });
+  }, []);
 
   useEffect(() => {
     if (currentView !== "slider") return; // 검색 화면일 때는 슬라이드 타이머 중지
@@ -126,7 +102,7 @@ function App() {
     const timer = setInterval(() => {
       setCurrentIndex((prev) => {
         setPrevIndex(prev);
-        return (prev + 1) % mockData.length;
+        return (prev + 1) % yearsList.length;
       });
     }, 15000);
 
@@ -316,17 +292,17 @@ function App() {
       ? keyboardLayouts.enShift
       : keyboardLayouts.en;
 
+  // 전체 입소자 데이터 배열 (캐시된 모든 연도 데이터 병합)
+  const allResidents = Object.values(residentsByYear).flat();
+
   // 검색어에 따른 입소자 필터링 (모든 연도의 데이터를 합친 후 이름으로 검색)
   const filteredResidents =
     searchValue.trim() === ""
       ? [] // 검색어가 없을 때는 빈 배열 반환
-      : mockData
-          .flatMap((data) => data.residents)
-          .filter((resident) => resident.name.includes(searchValue));
+      : allResidents.filter((resident) => resident.name.includes(searchValue));
 
   // 관리자 회원 조회 데이터 필터링 및 페이지네이션 계산
-  const adminAllResidents = mockData.flatMap((data) => data.residents);
-  const adminFilteredResidents = adminAllResidents.filter(
+  const adminFilteredResidents = allResidents.filter(
     (r) =>
       r.name.includes(adminSearchValue) ||
       (r.pin && r.pin.includes(adminSearchValue)) ||
@@ -344,7 +320,7 @@ function App() {
     <div className="app-container">
       {currentView === "slider" ? (
         <div className="slider-wrapper">
-          {mockData.map((data, index) => {
+          {yearsList.map((year, index) => {
             // 슬라이드 애니메이션을 위한 클래스 계산
             let positionClass = "next-slide";
             if (index === currentIndex) {
@@ -353,27 +329,36 @@ function App() {
               positionClass = "prev-slide";
             }
 
+            const residents = residentsByYear[year];
+
             return (
-              <div key={data.year} className={`slide ${positionClass}`}>
-                <h1 className="year-title">{data.year}년 입소자</h1>
+              <div key={year} className={`slide ${positionClass}`}>
+                <h1 className="year-title">{year}년 입소자</h1>
                 <div className="resident-list">
-                  {data.residents.map((resident) => (
-                    <div
-                      key={resident.id}
-                      className="resident-card"
-                      onClick={() => handleResidentClick(resident)}
-                    >
-                      <img
-                        src={resident.image}
-                        alt={resident.name}
-                        onError={(e) => {
-                          // 이미지 로드 실패 시 대체 이미지
-                          e.target.src = "/images/profile.png";
-                        }}
-                      />
-                      <h2 className="resident-name">{resident.name}</h2>
-                    </div>
-                  ))}
+                  {!residents ? (
+                    <p className="no-result">데이터를 불러오는 중입니다...</p>
+                  ) : residents.length === 0 ? (
+                    <p className="no-result">
+                      해당 연도의 입소자 데이터가 없습니다.
+                    </p>
+                  ) : (
+                    residents.map((resident) => (
+                      <div
+                        key={resident.id}
+                        className="resident-card"
+                        onClick={() => handleResidentClick(resident)}
+                      >
+                        <img
+                          src={resident.image}
+                          alt={resident.name}
+                          onError={(e) => {
+                            e.target.src = "/images/profile.png";
+                          }}
+                        />
+                        <h2 className="resident-name">{resident.name}</h2>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             );
@@ -572,7 +557,6 @@ function App() {
                       />
                     </th>
                     <th>No.</th>
-                    <th>사번 (ID)</th>
                     <th>이름</th>
                     <th>고유번호</th>
                     <th>입사 부서</th>
@@ -615,7 +599,6 @@ function App() {
                         <td>
                           {(adminCurrentPage - 1) * adminItemsPerPage + idx + 1}
                         </td>
-                        <td>{resident.id}</td>
                         <td>{resident.name}</td>
                         <td>{resident.pin}</td>
                         <td>{resident.department}</td>
@@ -623,7 +606,7 @@ function App() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="6" className="admin-table-empty">
+                      <td colSpan="5" className="admin-table-empty">
                         검색 결과가 없습니다.
                       </td>
                     </tr>
@@ -660,8 +643,6 @@ function App() {
                 onError={(e) => (e.target.src = "/images/profile.png")}
               />
               <div className="admin-edit-form">
-                <label>사번</label>
-                <input type="text" defaultValue={adminSelectedResident.id} />
                 <label>입사 부서</label>
                 <input
                   type="text"
