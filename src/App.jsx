@@ -57,10 +57,13 @@ function App() {
   const [showAdminModal, setShowAdminModal] = useState(false); // 관리자 로그인 팝업창
   const [adminPinInput, setAdminPinInput] = useState(""); // 입력된 관리자 비밀번호
   const [adminSearchValue, setAdminSearchValue] = useState(""); // 관리자 회원 조회 검색어
+  const [adminSearchKeyword, setAdminSearchKeyword] = useState(""); // 관리자 회원 조회 검색 적용어
   const [adminCurrentPage, setAdminCurrentPage] = useState(1); // 관리자 페이지네이션
   const [adminSelectedResident, setAdminSelectedResident] = useState(null); // 관리자 화면 회원 수정 팝업용
   const [adminSelectedForDelete, setAdminSelectedForDelete] = useState([]); // 삭제하기 위해 체크된 회원 ID 배열
   const [residentsByYear, setResidentsByYear] = useState({}); // 연도별 입소자 데이터 상태
+  const [isIdleModalOpen, setIsIdleModalOpen] = useState(false); // 무반응(유휴) 알림 팝업창 표시 여부
+  const [idleCountdown, setIdleCountdown] = useState(5); // 무반응 알림 팝업 카운트다운 숫자
 
   // 컴포넌트 마운트 시 전체 연도의 데이터를 비동기로 미리 호출하여 캐싱 (검색 및 슬라이더용)
   useEffect(() => {
@@ -95,6 +98,13 @@ function App() {
     });
   }, []);
 
+  // 데이터가 존재하는 연도만 필터링 (초기 로딩 시 화면 터짐 방지를 위해 임시로 올해 연도를 노출)
+  const activeYears = yearsList.filter(
+    (year) => residentsByYear[year] && residentsByYear[year].length > 0,
+  );
+  const sliderYears = activeYears.length > 0 ? activeYears : [CURRENT_YEAR];
+  const sliderYearsLength = sliderYears.length;
+
   useEffect(() => {
     if (currentView !== "slider") return; // 검색 화면일 때는 슬라이드 타이머 중지
 
@@ -102,12 +112,12 @@ function App() {
     const timer = setInterval(() => {
       setCurrentIndex((prev) => {
         setPrevIndex(prev);
-        return (prev + 1) % yearsList.length;
+        return (prev + 1) % sliderYearsLength;
       });
     }, 15000);
 
     return () => clearInterval(timer);
-  }, [currentView]);
+  }, [currentView, sliderYearsLength]);
 
   // 슬라이드가 왼쪽으로 완전히 빠진 후(1초 뒤) prevIndex를 초기화하여 오른쪽 대기 상태로 애니메이션 없이 즉시 이동
   useEffect(() => {
@@ -150,6 +160,67 @@ function App() {
     };
   }, [currentIndex, currentView]);
 
+  // 사용자 활동 감지 및 3분 무반응 시 팝업 타이머 설정
+  useEffect(() => {
+    let idleTimer;
+
+    const resetIdleTimer = () => {
+      // 홈 화면이거나 이미 모달이 떠있는 상태면 무시
+      if (currentView === "slider" || isIdleModalOpen) return;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(
+        () => {
+          setIsIdleModalOpen(true);
+          setIdleCountdown(5);
+        },
+        3 * 60 * 1000,
+      ); // 3분 (180,000ms)
+    };
+
+    if (currentView !== "slider") {
+      resetIdleTimer(); // 화면 진입 시 타이머 시작
+      window.addEventListener("mousemove", resetIdleTimer);
+      window.addEventListener("keydown", resetIdleTimer);
+      window.addEventListener("touchstart", resetIdleTimer);
+      window.addEventListener("click", resetIdleTimer);
+    }
+
+    return () => {
+      clearTimeout(idleTimer);
+      window.removeEventListener("mousemove", resetIdleTimer);
+      window.removeEventListener("keydown", resetIdleTimer);
+      window.removeEventListener("touchstart", resetIdleTimer);
+      window.removeEventListener("click", resetIdleTimer);
+    };
+  }, [currentView, isIdleModalOpen]);
+
+  // 팝업 표시 중 1초 단위 카운트다운 및 홈 화면 이동 처리
+  useEffect(() => {
+    let countdownInterval;
+    if (isIdleModalOpen) {
+      countdownInterval = setInterval(() => {
+        setIdleCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownInterval);
+            setIsIdleModalOpen(false);
+            setCurrentView("slider");
+            setIsMenuOpen(false);
+            setIsKeyboardOpen(false);
+            setShowPinModal(false);
+            setShowAdminModal(false);
+            setAdminSelectedResident(null);
+            setSearchValue(""); // 유휴 상태로 홈 복귀 시 일반 검색어 초기화
+            setAdminSearchValue(""); // 유휴 상태로 홈 복귀 시 관리자 검색어 초기화
+            setAdminSearchKeyword(""); // 유휴 상태로 홈 복귀 시 적용된 검색어 초기화
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(countdownInterval);
+  }, [isIdleModalOpen]);
+
   // 메뉴 열기/닫기 토글 함수
   const toggleMenu = () => {
     setIsMenuOpen((prev) => !prev);
@@ -162,6 +233,9 @@ function App() {
       setAdminPinInput("");
       setShowAdminModal(true);
       return;
+    }
+    if (view === "search") {
+      setSearchValue(""); // 검색 화면으로 진입 시 검색어 초기화
     }
     setCurrentView(view);
     if (view !== "search") {
@@ -229,11 +303,38 @@ function App() {
       setPinInput((prev) => prev.slice(0, -1));
     } else if (key === "확인") {
       if (pinInput === selectedResident.pin) {
-        // 번호 일치 시
-        setShowPinModal(false);
-        setPinInput("");
-        setCurrentView("detail");
-        setIsKeyboardOpen(false); // 가상 키보드 닫기
+        // 번호 일치 시 API 호출하여 상세 정보 가져오기
+        fetch(`/api/member/${selectedResident.id}`)
+          .then((res) => res.json())
+          .then((json) => {
+            if (json.success && json.data) {
+              const detailData = json.data;
+              setSelectedResident((prev) => ({
+                ...prev,
+                date: detailData.joinDate,
+                department: detailData.joinDepartmentName,
+                coworkers: detailData.colleaguesAtJoin
+                  ? detailData.colleaguesAtJoin.map((cw) => ({
+                      id: cw.memberId,
+                      name: cw.name,
+                      image: cw.profileImagePath || "/images/profile.png",
+                    }))
+                  : [],
+              }));
+              setShowPinModal(false);
+              setPinInput("");
+              setCurrentView("detail");
+              setIsKeyboardOpen(false); // 가상 키보드 닫기
+            } else {
+              alert("회원 상세 정보를 불러오지 못했습니다.");
+              setPinInput("");
+            }
+          })
+          .catch((err) => {
+            console.error("상세 정보 호출 에러:", err);
+            alert("상세 정보를 불러오는 중 오류가 발생했습니다.");
+            setPinInput("");
+          });
       } else {
         alert("고유번호가 일치하지 않습니다.");
         setPinInput("");
@@ -304,9 +405,9 @@ function App() {
   // 관리자 회원 조회 데이터 필터링 및 페이지네이션 계산
   const adminFilteredResidents = allResidents.filter(
     (r) =>
-      r.name.includes(adminSearchValue) ||
-      (r.pin && r.pin.includes(adminSearchValue)) ||
-      (r.id && r.id.toString().includes(adminSearchValue)),
+      r.name.includes(adminSearchKeyword) ||
+      (r.pin && r.pin.includes(adminSearchKeyword)) ||
+      (r.id && r.id.toString().includes(adminSearchKeyword)),
   );
   const adminItemsPerPage = 10; // 한 페이지에 보여줄 회원 수를 10명으로 늘림
   const adminTotalPages =
@@ -320,7 +421,7 @@ function App() {
     <div className="app-container">
       {currentView === "slider" ? (
         <div className="slider-wrapper">
-          {yearsList.map((year, index) => {
+          {sliderYears.map((year, index) => {
             // 슬라이드 애니메이션을 위한 클래스 계산
             let positionClass = "next-slide";
             if (index === currentIndex) {
@@ -405,6 +506,7 @@ function App() {
                     }}
                   />
                   <h2 className="resident-name">{resident.name}</h2>
+                  <p className="resident-desc">{resident.year}년 입소</p>
                 </div>
               ))
             ) : (
@@ -470,9 +572,15 @@ function App() {
           <h1 className="admin-header">관리자 페이지</h1>
           <div className="admin-menu-container">
             <button className="admin-menu-btn">회원 등록</button>
+            <button className="admin-menu-btn">부서 조회</button>
             <button
               className="admin-menu-btn"
-              onClick={() => setCurrentView("admin-list")}
+              onClick={() => {
+                setAdminSearchValue(""); // 관리자 회원 조회 진입 시 검색어 초기화
+                setAdminSearchKeyword(""); // 적용된 검색어도 초기화
+                setAdminCurrentPage(1); // 페이지도 1페이지로 초기화
+                setCurrentView("admin-list");
+              }}
             >
               회원 조회
             </button>
@@ -511,13 +619,22 @@ function App() {
                 value={adminSearchValue}
                 onChange={(e) => {
                   setAdminSearchValue(e.target.value);
-                  setAdminSelectedForDelete([]); // 검색 시 체크박스 초기화
-                  setAdminCurrentPage(1); // 검색 시 첫 페이지로 초기화
                 }}
                 onFocus={() => setIsKeyboardOpen(true)}
                 onClick={() => setIsKeyboardOpen(true)}
                 inputMode="none"
               />
+              <button
+                className="admin-search-btn"
+                onClick={() => {
+                  setAdminSearchKeyword(adminSearchValue); // 검색 버튼 클릭 시 필터 적용
+                  setAdminSelectedForDelete([]); // 체크박스 초기화
+                  setAdminCurrentPage(1); // 첫 페이지로 초기화
+                  setIsKeyboardOpen(false); // 키보드 닫기
+                }}
+              >
+                검색
+              </button>
             </div>
             <div className="admin-list-content">
               <table className="admin-table">
@@ -808,6 +925,26 @@ function App() {
             </div>
           </>
         )}
+
+      {/* 유휴 상태 알림 팝업창 (모달) */}
+      {isIdleModalOpen && (
+        <div className="idle-modal-overlay">
+          <div className="idle-modal">
+            <h2>알림</h2>
+            <p>
+              일정 시간 동안 움직임이 없어
+              <br />홈 화면으로 이동합니다.
+            </p>
+            <div className="idle-countdown">{idleCountdown}</div>
+            <button
+              className="idle-cancel-btn"
+              onClick={() => setIsIdleModalOpen(false)}
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 우측 하단 플로팅 메뉴 */}
       {currentView !== "admin" && (

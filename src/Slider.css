@@ -129,6 +129,13 @@
     0 0 15px rgba(0, 0, 0, 0.8); /* 검은색 그림자를 더 진하고 넓게 겹쳐서 가독성 극대화 */
 }
 
+.resident-desc {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 1.4rem;
+  margin: 0.8rem 0 0 0;
+  text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.9);
+}
+
 /* --- 우측 하단 플로팅 메뉴 --- */
 .floating-menu-container {
   position: fixed;
@@ -641,6 +648,8 @@
 .admin-menu-container {
   display: flex;
   gap: 4rem; /* 버튼 사이 간격 */
+  flex-wrap: wrap; /* 버튼이 많아질 경우 자연스럽게 줄바꿈 허용 */
+  justify-content: center; /* 버튼들이 항상 가운데 정렬되도록 설정 */
 }
 .admin-menu-btn {
   width: 220px;
@@ -692,13 +701,13 @@
 .admin-list-container {
   width: 95%; /* 전체 너비 확대 */
   max-width: 1600px; /* 최대 크기 확대 */
-  height: 90%; /* 세로 길이 확대 */
+  height: 95%; /* 모니터 화면에 더 꽉 차게 세로 길이 추가 확대 */
   background-color: rgba(255, 255, 255, 0.95);
   border-radius: 24px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  padding: 3rem 4rem;
+  padding: 1.5rem 3rem; /* 상하 안쪽 여백 추가 축소 */
   box-sizing: border-box;
 }
 
@@ -706,7 +715,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem; /* 타이틀 아래 여백 추가 축소 */
 }
 
 .admin-list-header h2 {
@@ -751,7 +760,8 @@
 
 .admin-list-search {
   display: flex;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem; /* 검색창 아래 여백 추가 축소 */
+  gap: 1rem; /* 검색창과 검색 버튼 사이 간격 */
 }
 
 .admin-list-search input {
@@ -766,6 +776,21 @@
   box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
+.admin-search-btn {
+  padding: 0 2.5rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: #fff;
+  background-color: #333;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.admin-search-btn:hover {
+  background-color: #555;
+}
+
 .admin-list-content {
   flex: 1;
   overflow: hidden;
@@ -776,19 +801,20 @@
   border-collapse: collapse;
   text-align: left;
   color: #333;
-  font-size: 1.4rem;
+  font-size: 1.3rem; /* 글자 크기 미세 조정으로 텍스트 줄바꿈 방지 */
 }
 
 .admin-table th,
 .admin-table td {
-  padding: 0.8rem 1rem; /* 한 페이지에 10명이 보일 수 있도록 라인 두께 대폭 축소 */
+  padding: 0.3rem 1rem; /* 라인 상하 여백 추가 축소 */
   border-bottom: 1px solid #ddd;
+  height: 40px; /* 줄 높이를 40px로 줄여서 10명이 무조건 한 화면에 들어오게 고정 */
 }
 
 .admin-table th {
   font-weight: 600;
   background-color: rgba(0, 0, 0, 0.05);
-  font-size: 1.5rem;
+  font-size: 1.4rem; /* 헤더 글자 크기 미세 조정 */
 }
 
 .admin-table tbody tr {
@@ -811,7 +837,7 @@
   display: flex;
   justify-content: center;
   gap: 1rem;
-  margin-top: 2rem;
+  margin-top: 1.5rem; /* 페이지네이션 위 여백 축소 */
 }
 
 .admin-page-btn {
@@ -977,4 +1003,71 @@
 .admin-edit-save {
   background-color: #333;
   color: #fff;
+}
+
+/* --- 유휴 상태 알림 팝업창 (모달) --- */
+.idle-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.85);
+  z-index: 1000; /* 모든 화면 위에 최상단 표시 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.idle-modal {
+  background-color: #f5f5fa;
+  padding: 4rem;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  color: #333;
+  animation: slideUpKeyboard 0.3s ease-out;
+}
+
+.idle-modal h2 {
+  font-size: 3rem;
+  margin: 0 0 1.5rem 0;
+  color: #000;
+}
+
+.idle-modal p {
+  font-size: 1.8rem;
+  margin: 0 0 2rem 0;
+  color: #555;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.idle-countdown {
+  font-size: 6rem;
+  font-weight: 700;
+  color: #ff4d4f; /* 눈에 띄는 빨간색 카운트다운 */
+  margin-bottom: 3rem;
+}
+
+.idle-cancel-btn {
+  width: 100%;
+  padding: 1.5rem 3rem;
+  font-size: 1.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: #555555;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    transform 0.1s;
+}
+
+.idle-cancel-btn:active {
+  transform: scale(0.98);
 }
