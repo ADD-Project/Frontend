@@ -419,6 +419,23 @@ function App() {
 
   return (
     <div className="app-container">
+      {/* 우측 상단 고정 로고 (관리자 관련 화면에서는 숨김) */}
+      {currentView !== "admin" && currentView !== "admin-list" && (
+        <div className="top-right-container">
+          <img
+            src="/images/국방과학연구소 로고_국문.png"
+            alt="국방과학연구소 로고"
+            className="top-right-logo"
+          />
+          <div className="top-right-text">
+            <div className="text-main">제 5 기술연구원</div>
+            <div className="text-sub">
+              The 5th Technology Research Institute
+            </div>
+          </div>
+        </div>
+      )}
+
       {currentView === "slider" ? (
         <div className="slider-wrapper">
           {sliderYears.map((year, index) => {
