@@ -9,6 +9,7 @@
   background-color: #000;
   color: #ffffff;
   font-family: "국방과학연구소체", sans-serif;
+  touch-action: manipulation; /* 더블 탭 줌 확대 방지 및 패닝(스크롤)만 허용 */
 }
 
 /* 가상 요소를 이용한 배경 이미지 블러 및 어둡기 처리 */
@@ -82,7 +83,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start; /* 중앙 정렬 대신 상단에서부터 차례대로 배치되도록 수정 */
   padding: 2rem;
   box-sizing: border-box;
 }
@@ -122,20 +123,16 @@
 }
 
 .resident-list {
-  display: flex;
-  gap: 4rem;
-  flex-wrap: wrap;
-  justify-content: center;
-  max-height: 70vh; /* 화면 아래로 튀어나가지 않도록 최대 높이 설정 */
-  overflow-y: auto; /* 넘치면 스크롤 생성 */
-  padding: 1rem;
-  -ms-overflow-style: none; /* IE and Edge 스크롤바 숨김 */
-  scrollbar-width: none; /* Firefox 스크롤바 숨김 */
-}
-
-/* 자동 스크롤되므로 전시용 화면에서 스크롤바 자체를 완전히 숨김 */
-.resident-list::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Edge 등에서 스크롤바 숨김 */
+  display: grid;
+  grid-template-columns: repeat(8, 1fr); /* 8명씩 동일한 간격으로 배치 */
+  grid-template-rows: repeat(3, auto); /* 3줄 배치 */
+  gap: 3rem 1rem; /* 위아래 3rem, 양옆 1rem 간격 */
+  justify-content: start;
+  justify-items: center; /* 그리드 셀 안에서 카드 가운데 정렬 */
+  align-content: start; /* 상단부터 차례대로 채우기 */
+  width: 100%;
+  max-width: 1800px; /* 전체 너비를 넓게 사용하여 8개가 들어가도록 설정 */
+  margin-top: 10rem; /* 위에서부터 차례대로 쌓이므로 타이틀과 겹치지 않게 마진을 약간 더 늘림 */
 }
 
 .resident-card {
@@ -144,6 +141,7 @@
   align-items: center;
   cursor: pointer;
   transition: transform 0.2s ease;
+  width: 100%;
 }
 
 .resident-card:hover {
@@ -151,30 +149,23 @@
 }
 
 .resident-card img {
-  width: 180px;
-  height: 240px; /* 3:4 비율로 증명사진 형태 적용 */
+  width: 140px; /* 8명을 한 화면에 여유롭게 배치하기 위해 축소 */
+  height: 186px; /* 3:4 비율 유지 */
   border-radius: 12px; /* 약간 둥근 모서리 */
   object-fit: cover;
   object-position: center 15%; /* 사람 얼굴(위쪽) 위주로 자르도록 기준점 상향 조정 */
   border: 4px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem; /* 사진과 이름 사이 여백 축소 */
 }
 
 .resident-name {
   color: #ffffff;
-  font-size: 1.8rem;
+  font-size: 1.5rem; /* 카드 크기에 맞춰 폰트 축소 */
   font-weight: 600; /* 가독성을 위해 글씨를 약간 더 굵게 */
   text-shadow:
     2px 2px 8px rgba(0, 0, 0, 1),
     0 0 15px rgba(0, 0, 0, 0.8); /* 검은색 그림자를 더 진하고 넓게 겹쳐서 가독성 극대화 */
-}
-
-.resident-desc {
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 1.4rem;
-  margin: 0.8rem 0 0 0;
-  text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.9);
 }
 
 /* --- 우측 하단 플로팅 메뉴 --- */
@@ -268,7 +259,7 @@
 
 .search-header {
   position: relative;
-  z-index: 45; /* 가상 키보드 배경 오버레이보다 위에 위치하도록 설정 */
+  z-index: 405; /* 가상 키보드 배경 오버레이보다 위에 위치하도록 설정 */
   display: flex;
   gap: 1rem;
   width: 100%;
@@ -310,12 +301,14 @@
 /* --- 검색 결과 스타일 --- */
 .search-results {
   margin-top: 3rem;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 3rem;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr); /* 왼쪽 상단부터 8명씩 배치 */
+  justify-content: start;
+  justify-items: center;
+  align-content: start;
+  gap: 3rem 1rem; /* 위아래 3rem, 양옆 1rem 간격 */
   width: 100%;
-  max-width: 1200px;
+  max-width: 1800px; /* 8명이 넉넉히 들어가도록 전체 화면 너비 활용 */
   max-height: calc(
     100vh - 25rem
   ); /* 검색창 등의 상단 여백 제외하고 스크롤 가능하도록 높이 제한 */
@@ -327,6 +320,11 @@
 
 .search-results::-webkit-scrollbar {
   display: none;
+}
+
+.search-results > .no-result {
+  grid-column: 1 / -1; /* 데이터가 없을 때 나오는 안내 문구는 전체 가로를 차지하도록 설정 */
+  text-align: center;
 }
 
 .no-result {
@@ -342,7 +340,7 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 40; /* 키보드(50)보단 아래, 검색창(45)보단 아래에 위치 */
+  z-index: 400; /* 키보드(410)보단 아래, 모달(300)보단 위에 위치 */
 }
 
 /* --- 가상 키보드 스타일 --- */
@@ -363,7 +361,7 @@
   gap: 0.8rem;
   box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2); /* 밝은 테마에 맞게 그림자 약화 */
   box-sizing: border-box;
-  z-index: 50;
+  z-index: 410;
   animation: slideUpKeyboard 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -647,6 +645,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.coworker-card:hover {
+  transform: scale(1.05);
 }
 .coworker-card img {
   width: 120px; /* 부서원 사진 크기 축소 */
@@ -842,20 +846,20 @@
   border-collapse: collapse;
   text-align: left;
   color: #333;
-  font-size: 1.3rem; /* 글자 크기 미세 조정으로 텍스트 줄바꿈 방지 */
+  font-size: 1.2rem; /* 1.1rem -> 1.2rem으로 살짝 확대 */
 }
 
 .admin-table th,
 .admin-table td {
-  padding: 0.3rem 1rem; /* 라인 상하 여백 추가 축소 */
+  padding: 0.2rem 1rem; /* 상하 여백 0.3rem -> 0.2rem 축소 */
   border-bottom: 1px solid #ddd;
-  height: 40px; /* 줄 높이를 40px로 줄여서 10명이 무조건 한 화면에 들어오게 고정 */
+  height: 38px; /* 35px -> 38px로 살짝 확대 */
 }
 
 .admin-table th {
   font-weight: 600;
   background-color: rgba(0, 0, 0, 0.05);
-  font-size: 1.4rem; /* 헤더 글자 크기 미세 조정 */
+  font-size: 1.3rem; /* 헤더 1.2rem -> 1.3rem 살짝 확대 */
 }
 
 .admin-table tbody tr {

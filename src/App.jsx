@@ -2,13 +2,8 @@ import { useState, useEffect } from "react";
 import * as Hangul from "hangul-js";
 import "./Slider.css";
 
-// 조회할 연도 리스트 생성 (1978년 ~ 현재 연도)
-const START_YEAR = 1978;
+// 현재 연도 구하기 (기본값용)
 const CURRENT_YEAR = new Date().getFullYear();
-const yearsList = Array.from(
-  { length: CURRENT_YEAR - START_YEAR + 1 },
-  (_, i) => START_YEAR + i,
-);
 
 // 가상 키보드 레이아웃
 const keyboardLayouts = {
@@ -48,6 +43,7 @@ function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentView, setCurrentView] = useState("slider"); // "slider", "search" 또는 "detail"
   const [searchValue, setSearchValue] = useState(""); // 검색어 상태
+  const [searchResults, setSearchResults] = useState([]); // 검색 API 결과 상태
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false); // 키보드 표시 여부
   const [isLangKo, setIsLangKo] = useState(true); // 한/영 상태
   const [isShift, setIsShift] = useState(false); // Shift 상태 추가
@@ -61,49 +57,123 @@ function App() {
   const [adminCurrentPage, setAdminCurrentPage] = useState(1); // 관리자 페이지네이션
   const [adminSelectedResident, setAdminSelectedResident] = useState(null); // 관리자 화면 회원 수정 팝업용
   const [adminSelectedForDelete, setAdminSelectedForDelete] = useState([]); // 삭제하기 위해 체크된 회원 ID 배열
+  const [adminMembersList, setAdminMembersList] = useState([]); // 관리자 회원 조회 API 결과
+  const [adminTotalPagesState, setAdminTotalPagesState] = useState(1); // 관리자 API 총 페이지 수
+  const [adminCurrentPassword, setAdminCurrentPassword] = useState(""); // 관리자 현재 비밀번호
+  const [adminNewPassword, setAdminNewPassword] = useState(""); // 관리자 새 비밀번호
+  const [focusedInput, setFocusedInput] = useState(null); // 현재 포커스된 입력창 구분
   const [residentsByYear, setResidentsByYear] = useState({}); // 연도별 입소자 데이터 상태
+  const [yearsList, setYearsList] = useState([]); // 조회할 연도 리스트 상태
   const [isIdleModalOpen, setIsIdleModalOpen] = useState(false); // 무반응(유휴) 알림 팝업창 표시 여부
   const [idleCountdown, setIdleCountdown] = useState(5); // 무반응 알림 팝업 카운트다운 숫자
 
+  // 터치 및 휠을 이용한 화면 확대/축소(줌) 방지
+  useEffect(() => {
+    const handleTouch = (e) => {
+      if (e.touches.length > 1) {
+        e.preventDefault(); // 두 손가락 터치(핀치 줌) 방지
+      }
+    };
+
+    const handleWheel = (e) => {
+      if (e.ctrlKey) {
+        e.preventDefault(); // Ctrl + 마우스 휠 줌 방지
+      }
+    };
+
+    // passive: false로 설정해야 e.preventDefault()가 정상적으로 동작함
+    document.addEventListener("touchstart", handleTouch, { passive: false });
+    document.addEventListener("touchmove", handleTouch, { passive: false });
+    document.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouch);
+      document.removeEventListener("touchmove", handleTouch);
+      document.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
+
   // 컴포넌트 마운트 시 전체 연도의 데이터를 비동기로 미리 호출하여 캐싱 (검색 및 슬라이더용)
   useEffect(() => {
-    yearsList.forEach((year) => {
-      fetch(`/api/members/admission-years/${year}`, {
-        method: "GET",
-      })
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success && json.data) {
-            // API 응답 데이터를 기존 UI 구조에 맞게 매핑
-            const mappedData = json.data.map((r) => ({
-              year: year,
-              id: r.memberId,
-              name: r.name,
-              image: r.profileImagePath || "/images/profile.png", // 이미지가 없을 때 기본 이미지로 대체
-              pin: "1234", // API에 없으면 기본값 세팅 (테스트용)
-              date: `${year}-01-01`, // API에 없으면 임시 설정
-              department: "미배정", // API에 없으면 임시 설정
-              deptHistory: [],
-              coworkers: [],
-            }));
-            setResidentsByYear((prev) => ({ ...prev, [year]: mappedData }));
-          } else {
-            setResidentsByYear((prev) => ({ ...prev, [year]: [] }));
-          }
-        })
-        .catch((err) => {
-          console.error(`${year}년 데이터 호출 에러:`, err);
-          setResidentsByYear((prev) => ({ ...prev, [year]: [] }));
+    // 1. 먼저 연도 범위를 조회합니다.
+    fetch("/api/members/admission-years/range", {
+      method: "GET",
+    })
+      .then((res) => res.json())
+      .then((rangeJson) => {
+        let start = 1978;
+        let end = CURRENT_YEAR;
+
+        if (rangeJson.success && rangeJson.data) {
+          start = rangeJson.data.minYear || start;
+          end = rangeJson.data.maxYear || end;
+        }
+
+        const fetchedYearsList = Array.from(
+          { length: end - start + 1 },
+          (_, i) => start + i,
+        );
+        setYearsList(fetchedYearsList);
+
+        // 2. 구해진 연도 범위에 맞춰 개별 연도 데이터를 호출합니다.
+        fetchedYearsList.forEach((year) => {
+          fetch(`/api/members/admission-years/${year}`, {
+            method: "GET",
+          })
+            .then((res) => res.json())
+            .then((json) => {
+              if (json.success && json.data) {
+                const mappedData = json.data.map((r) => ({
+                  year: year,
+                  id: r.memberId,
+                  name: r.name,
+                  image: r.profileImagePath || "/images/profile.png",
+                  pin: r.memberCode ? String(r.memberCode) : "", // 실제 회원의 고유번호를 문자로 안전하게 매핑
+                  date: `${year}-01-01`, // API에 없으면 임시 설정
+                  department: "미배정", // API에 없으면 임시 설정
+                  deptHistory: [],
+                  coworkers: [],
+                }));
+                setResidentsByYear((prev) => ({ ...prev, [year]: mappedData }));
+              } else {
+                setResidentsByYear((prev) => ({ ...prev, [year]: [] }));
+              }
+            })
+            .catch((err) => {
+              console.error(`${year}년 데이터 호출 에러:`, err);
+              setResidentsByYear((prev) => ({ ...prev, [year]: [] }));
+            });
         });
-    });
+      })
+      .catch((err) => {
+        console.error("연도 범위 호출 에러:", err);
+      });
   }, []);
 
   // 데이터가 존재하는 연도만 필터링 (초기 로딩 시 화면 터짐 방지를 위해 임시로 올해 연도를 노출)
   const activeYears = yearsList.filter(
     (year) => residentsByYear[year] && residentsByYear[year].length > 0,
   );
-  const sliderYears = activeYears.length > 0 ? activeYears : [CURRENT_YEAR];
-  const sliderYearsLength = sliderYears.length;
+
+  // 1페이지(화면) 당 8명씩 3줄 = 24명 제한
+  const ITEMS_PER_PAGE = 24;
+  const sliderPages = [];
+
+  if (activeYears.length === 0) {
+    sliderPages.push({ year: CURRENT_YEAR, residents: null, pageIndex: 0 });
+  } else {
+    activeYears.forEach((year) => {
+      const yearResidents = residentsByYear[year];
+      for (let i = 0; i < yearResidents.length; i += ITEMS_PER_PAGE) {
+        sliderPages.push({
+          year: year,
+          pageIndex: i / ITEMS_PER_PAGE,
+          residents: yearResidents.slice(i, i + ITEMS_PER_PAGE),
+        });
+      }
+    });
+  }
+  const sliderPagesLength = sliderPages.length;
 
   useEffect(() => {
     if (currentView !== "slider") return; // 검색 화면일 때는 슬라이드 타이머 중지
@@ -112,12 +182,12 @@ function App() {
     const timer = setInterval(() => {
       setCurrentIndex((prev) => {
         setPrevIndex(prev);
-        return (prev + 1) % sliderYearsLength;
+        return (prev + 1) % sliderPagesLength;
       });
     }, 15000);
 
     return () => clearInterval(timer);
-  }, [currentView, sliderYearsLength]);
+  }, [currentView, sliderPagesLength]);
 
   // 슬라이드가 왼쪽으로 완전히 빠진 후(1초 뒤) prevIndex를 초기화하여 오른쪽 대기 상태로 애니메이션 없이 즉시 이동
   useEffect(() => {
@@ -129,36 +199,40 @@ function App() {
     }
   }, [prevIndex]);
 
-  // 리스트 자동 스크롤 애니메이션 추가
+  // 검색어 변경 시 회원 검색 API 호출 (디바운스 적용)
   useEffect(() => {
-    if (currentView !== "slider") return; // 검색 화면일 때는 스크롤 타이머 중지
-
-    let scrollInterval;
-    let startTimeout;
-
-    const listElement = document.querySelector(".active-slide .resident-list");
-
-    if (listElement) {
-      listElement.scrollTop = 0; // 화면 진입 시 스크롤 맨 위로 초기화
-
-      // 슬라이드가 들어오는 애니메이션(1초)을 기다린 후 스크롤 시작
-      startTimeout = setTimeout(() => {
-        scrollInterval = setInterval(() => {
-          if (
-            listElement.scrollTop + listElement.clientHeight <
-            listElement.scrollHeight
-          ) {
-            listElement.scrollTop += 1; // 아래로 1px씩 이동
-          }
-        }, 20); // 20ms마다 1px 이동 (숫자가 작을수록 스크롤 속도가 빠름)
-      }, 1000);
+    if (searchValue.trim() === "") {
+      setSearchResults([]);
+      return;
     }
 
-    return () => {
-      clearTimeout(startTimeout);
-      clearInterval(scrollInterval);
-    };
-  }, [currentIndex, currentView]);
+    const timeoutId = setTimeout(() => {
+      fetch(
+        `/api/members/search?name=${encodeURIComponent(searchValue.trim())}`,
+      )
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data) {
+            const mappedData = json.data.map((r) => ({
+              id: r.memberId,
+              pin: r.memberCode ? String(r.memberCode) : "", // 실제 고유번호 매핑
+              name: r.name,
+              image: r.profileImagePath || "/images/profile.png",
+              department: r.joinDepartmentName || "미배정",
+            }));
+            setSearchResults(mappedData);
+          } else {
+            setSearchResults([]);
+          }
+        })
+        .catch((err) => {
+          console.error("검색 API 호출 에러:", err);
+          setSearchResults([]);
+        });
+    }, 300); // 0.3초 딜레이 (타이핑 중복 호출 방지)
+
+    return () => clearTimeout(timeoutId);
+  }, [searchValue]);
 
   // 사용자 활동 감지 및 3분 무반응 시 팝업 타이머 설정
   useEffect(() => {
@@ -209,6 +283,8 @@ function App() {
             setShowPinModal(false);
             setShowAdminModal(false);
             setAdminSelectedResident(null);
+            setAdminCurrentPassword("");
+            setAdminNewPassword("");
             setSearchValue(""); // 유휴 상태로 홈 복귀 시 일반 검색어 초기화
             setAdminSearchValue(""); // 유휴 상태로 홈 복귀 시 관리자 검색어 초기화
             setAdminSearchKeyword(""); // 유휴 상태로 홈 복귀 시 적용된 검색어 초기화
@@ -241,25 +317,42 @@ function App() {
     if (view !== "search") {
       setIsKeyboardOpen(false); // 화면 이동 시 키보드 닫기
       setIsShift(false);
+      setFocusedInput(null);
     }
   };
 
   // 가상 키보드 입력 핸들러 (hangul-js 적용)
   const handleKeyPress = (key) => {
-    const isSearch = currentView === "search";
-    const isAdminList = currentView === "admin-list";
+    let updateTarget = null;
+    let targetValue = "";
 
-    // 현재 화면에 따라 상태를 업데이트할 대상 지정
-    const updateTarget = isSearch
-      ? setSearchValue
-      : isAdminList
-        ? setAdminSearchValue
-        : null;
-    const targetValue = isSearch
-      ? searchValue
-      : isAdminList
-        ? adminSearchValue
-        : "";
+    if (focusedInput === "search") {
+      updateTarget = setSearchValue;
+      targetValue = searchValue;
+    } else if (focusedInput === "adminSearch") {
+      updateTarget = setAdminSearchValue;
+      targetValue = adminSearchValue;
+    } else if (focusedInput === "adminCurrentPassword") {
+      updateTarget = setAdminCurrentPassword;
+      targetValue = adminCurrentPassword;
+    } else if (focusedInput === "adminNewPassword") {
+      updateTarget = setAdminNewPassword;
+      targetValue = adminNewPassword;
+    } else {
+      // 포커스가 명확하지 않을 때의 기본 동작
+      const isSearch = currentView === "search";
+      const isAdminList = currentView === "admin-list";
+      updateTarget = isSearch
+        ? setSearchValue
+        : isAdminList
+          ? setAdminSearchValue
+          : null;
+      targetValue = isSearch
+        ? searchValue
+        : isAdminList
+          ? adminSearchValue
+          : "";
+    }
 
     if (!updateTarget) return;
 
@@ -274,6 +367,7 @@ function App() {
     } else if (key === "닫기") {
       setIsKeyboardOpen(false);
       setIsShift(false);
+      setFocusedInput(null);
     } else if (key === "한/영") {
       setIsLangKo(!isLangKo);
       setIsShift(false); // 언어 변경 시 Shift 초기화
@@ -289,6 +383,7 @@ function App() {
 
   // 프로필 카드 클릭 시 팝업 띄우기
   const handleResidentClick = (resident) => {
+    console.log("선택된 회원 데이터 (F12에서 확인):", resident); // 백엔드에서 전달받은 실제 고유번호(pin) 확인용
     setSelectedResident(resident);
     setPinInput("");
     setShowPinModal(true);
@@ -318,6 +413,7 @@ function App() {
                       id: cw.memberId,
                       name: cw.name,
                       image: cw.profileImagePath || "/images/profile.png",
+                      pin: cw.memberCode ? String(cw.memberCode) : "", // 부서원도 고유번호를 가지도록 추가
                     }))
                   : [],
               }));
@@ -367,21 +463,103 @@ function App() {
     } else if (key === "지우기") {
       setAdminPinInput((prev) => prev.slice(0, -1));
     } else if (key === "확인") {
-      if (adminPinInput === "1234") {
-        // 관리자 비밀번호 일치 시
-        setShowAdminModal(false);
-        setAdminPinInput("");
-        setCurrentView("admin");
-        setIsKeyboardOpen(false); // 가상 키보드 닫기
-      } else {
-        alert("비밀번호가 일치하지 않습니다.");
-        setAdminPinInput("");
-      }
+      fetch("/api/admin/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password: adminPinInput }),
+      })
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success) {
+            setShowAdminModal(false);
+            setAdminPinInput("");
+            setCurrentView("admin");
+            setIsKeyboardOpen(false); // 가상 키보드 닫기
+          } else {
+            alert("비밀번호가 일치하지 않습니다.");
+            setAdminPinInput("");
+          }
+        })
+        .catch((err) => {
+          console.error("관리자 로그인 에러:", err);
+          alert("관리자 로그인 중 오류가 발생했습니다.");
+          setAdminPinInput("");
+        });
     } else {
       if (adminPinInput.length < 8) {
         setAdminPinInput((prev) => prev + key);
       }
     }
+  };
+
+  // 관리자 회원 조회 API 호출
+  const fetchAdminMembers = (page, keyword) => {
+    const pageParam = page - 1; // Spring Boot(Pageable)는 기본적으로 0-based page 사용
+    let url = `/api/admin/members?page=${pageParam}&size=10`;
+    if (keyword) {
+      url += `&keyword=${encodeURIComponent(keyword)}`; // 백엔드 검색 구현에 맞춰 파라미터 추가
+    }
+
+    fetch(url)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && json.data) {
+          const mappedData = json.data.content.map((r) => ({
+            id: r.memberId,
+            pin: r.memberCode || "",
+            name: r.name,
+            image: r.profileImagePath || "/images/profile.png",
+            department: r.joinDepartmentName || "미배정",
+            deptHistory: [], // 필요 시 이력 추가
+          }));
+          setAdminMembersList(mappedData);
+          setAdminTotalPagesState(
+            json.data.totalPages === 0 ? 1 : json.data.totalPages,
+          );
+        } else {
+          setAdminMembersList([]);
+          setAdminTotalPagesState(1);
+        }
+      })
+      .catch((err) => {
+        console.error("관리자 회원 조회 에러:", err);
+        setAdminMembersList([]);
+        setAdminTotalPagesState(1);
+      });
+  };
+
+  // 관리자 회원 상세 조회 API 호출
+  const fetchAdminMemberDetail = (id) => {
+    fetch(`/api/admin/members/${id}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && json.data) {
+          const d = json.data;
+          setAdminSelectedResident({
+            id: id,
+            name: d.name,
+            image: d.profileImagePath || "/images/profile.png",
+            department: d.joinDepartmentName || "",
+            date: d.joinDate || "",
+            // 부서 변경 이력을 보기 좋게 문자열 배열로 가공
+            deptHistory: d.departmentHistories
+              ? d.departmentHistories.map(
+                  (h) => `[${h.startDate}] ${h.departmentName}`,
+                )
+              : [],
+          });
+          setAdminCurrentPassword(""); // 모달 열 때 비밀번호 입력 초기화
+          setAdminNewPassword("");
+        } else {
+          alert("회원 상세 정보를 불러오지 못했습니다.");
+        }
+      })
+      .catch((err) => {
+        console.error("관리자 회원 상세 조회 에러:", err);
+        alert("상세 정보를 불러오는 중 오류가 발생했습니다.");
+      });
   };
 
   // 현재 상태에 맞는 키보드 레이아웃 선택
@@ -393,29 +571,7 @@ function App() {
       ? keyboardLayouts.enShift
       : keyboardLayouts.en;
 
-  // 전체 입소자 데이터 배열 (캐시된 모든 연도 데이터 병합)
-  const allResidents = Object.values(residentsByYear).flat();
-
-  // 검색어에 따른 입소자 필터링 (모든 연도의 데이터를 합친 후 이름으로 검색)
-  const filteredResidents =
-    searchValue.trim() === ""
-      ? [] // 검색어가 없을 때는 빈 배열 반환
-      : allResidents.filter((resident) => resident.name.includes(searchValue));
-
-  // 관리자 회원 조회 데이터 필터링 및 페이지네이션 계산
-  const adminFilteredResidents = allResidents.filter(
-    (r) =>
-      r.name.includes(adminSearchKeyword) ||
-      (r.pin && r.pin.includes(adminSearchKeyword)) ||
-      (r.id && r.id.toString().includes(adminSearchKeyword)),
-  );
-  const adminItemsPerPage = 10; // 한 페이지에 보여줄 회원 수를 10명으로 늘림
-  const adminTotalPages =
-    Math.ceil(adminFilteredResidents.length / adminItemsPerPage) || 1;
-  const adminPaginatedResidents = adminFilteredResidents.slice(
-    (adminCurrentPage - 1) * adminItemsPerPage,
-    adminCurrentPage * adminItemsPerPage,
-  );
+  const adminItemsPerPage = 10; // 한 페이지에 보여줄 회원 수를 10명으로 유지 (API 사이즈와 맞춤)
 
   return (
     <div className="app-container">
@@ -438,7 +594,7 @@ function App() {
 
       {currentView === "slider" ? (
         <div className="slider-wrapper">
-          {sliderYears.map((year, index) => {
+          {sliderPages.map((page, index) => {
             // 슬라이드 애니메이션을 위한 클래스 계산
             let positionClass = "next-slide";
             if (index === currentIndex) {
@@ -447,20 +603,24 @@ function App() {
               positionClass = "prev-slide";
             }
 
-            const residents = residentsByYear[year];
-
             return (
-              <div key={year} className={`slide ${positionClass}`}>
-                <h1 className="year-title">{year}년 입소자</h1>
+              <div
+                key={`${page.year}-${page.pageIndex}`}
+                className={`slide ${positionClass}`}
+              >
+                <h1 className="year-title">
+                  {page.year}년 입소자{" "}
+                  {page.pageIndex > 0 ? `(${page.pageIndex + 1}p)` : ""}
+                </h1>
                 <div className="resident-list">
-                  {!residents ? (
+                  {!page.residents ? (
                     <p className="no-result">데이터를 불러오는 중입니다...</p>
-                  ) : residents.length === 0 ? (
+                  ) : page.residents.length === 0 ? (
                     <p className="no-result">
                       해당 연도의 입소자 데이터가 없습니다.
                     </p>
                   ) : (
-                    residents.map((resident) => (
+                    page.residents.map((resident) => (
                       <div
                         key={resident.id}
                         className="resident-card"
@@ -491,13 +651,22 @@ function App() {
               placeholder="입소자 이름 검색..."
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
-              onFocus={() => setIsKeyboardOpen(true)}
-              onClick={() => setIsKeyboardOpen(true)}
+              onFocus={() => {
+                setIsKeyboardOpen(true);
+                setFocusedInput("search");
+              }}
+              onClick={() => {
+                setIsKeyboardOpen(true);
+                setFocusedInput("search");
+              }}
               inputMode="none" /* 모바일/OS 기본 터치 키보드가 올라오는 것을 방지 */
             />
             <button
               className="search-btn"
-              onClick={() => setIsKeyboardOpen(false)}
+              onClick={() => {
+                setIsKeyboardOpen(false);
+                setFocusedInput(null);
+              }}
             >
               검색
             </button>
@@ -507,8 +676,8 @@ function App() {
           <div className="search-results">
             {searchValue.trim() === "" ? (
               <p className="no-result">검색할 이름을 입력해주세요.</p>
-            ) : filteredResidents.length > 0 ? (
-              filteredResidents.map((resident) => (
+            ) : searchResults.length > 0 ? (
+              searchResults.map((resident) => (
                 <div
                   key={resident.id}
                   className="resident-card"
@@ -523,7 +692,6 @@ function App() {
                     }}
                   />
                   <h2 className="resident-name">{resident.name}</h2>
-                  <p className="resident-desc">{resident.year}년 입소</p>
                 </div>
               ))
             ) : (
@@ -557,8 +725,12 @@ function App() {
             <div className="coworker-list">
               {selectedResident.coworkers &&
               selectedResident.coworkers.length > 0 ? (
-                selectedResident.coworkers.map((cw, idx) => (
-                  <div key={idx} className="coworker-card">
+                selectedResident.coworkers.map((cw) => (
+                  <div
+                    key={cw.id}
+                    className="coworker-card"
+                    onClick={() => handleResidentClick(cw)}
+                  >
                     <img
                       src={cw.image}
                       alt={cw.name}
@@ -597,6 +769,7 @@ function App() {
                 setAdminSearchKeyword(""); // 적용된 검색어도 초기화
                 setAdminCurrentPage(1); // 페이지도 1페이지로 초기화
                 setCurrentView("admin-list");
+                fetchAdminMembers(1, ""); // 진입 시 전체 조회 API 호출
               }}
             >
               회원 조회
@@ -637,8 +810,14 @@ function App() {
                 onChange={(e) => {
                   setAdminSearchValue(e.target.value);
                 }}
-                onFocus={() => setIsKeyboardOpen(true)}
-                onClick={() => setIsKeyboardOpen(true)}
+                onFocus={() => {
+                  setIsKeyboardOpen(true);
+                  setFocusedInput("adminSearch");
+                }}
+                onClick={() => {
+                  setIsKeyboardOpen(true);
+                  setFocusedInput("adminSearch");
+                }}
                 inputMode="none"
               />
               <button
@@ -648,6 +827,7 @@ function App() {
                   setAdminSelectedForDelete([]); // 체크박스 초기화
                   setAdminCurrentPage(1); // 첫 페이지로 초기화
                   setIsKeyboardOpen(false); // 키보드 닫기
+                  fetchAdminMembers(1, adminSearchValue); // 검색 시 API 호출
                 }}
               >
                 검색
@@ -661,8 +841,8 @@ function App() {
                       <input
                         type="checkbox"
                         checked={
-                          adminPaginatedResidents.length > 0 &&
-                          adminPaginatedResidents.every((r) =>
+                          adminMembersList.length > 0 &&
+                          adminMembersList.every((r) =>
                             adminSelectedForDelete.includes(r.id),
                           )
                         }
@@ -671,7 +851,7 @@ function App() {
                             const newSelections = new Set(
                               adminSelectedForDelete,
                             );
-                            adminPaginatedResidents.forEach((r) =>
+                            adminMembersList.forEach((r) =>
                               newSelections.add(r.id),
                             );
                             setAdminSelectedForDelete(
@@ -681,9 +861,7 @@ function App() {
                             setAdminSelectedForDelete(
                               adminSelectedForDelete.filter(
                                 (id) =>
-                                  !adminPaginatedResidents.find(
-                                    (r) => r.id === id,
-                                  ),
+                                  !adminMembersList.find((r) => r.id === id),
                               ),
                             );
                           }
@@ -697,11 +875,11 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {adminPaginatedResidents.length > 0 ? (
-                    adminPaginatedResidents.map((resident, idx) => (
+                  {adminMembersList.length > 0 ? (
+                    adminMembersList.map((resident, idx) => (
                       <tr
                         key={resident.id}
-                        onClick={() => setAdminSelectedResident(resident)}
+                        onClick={() => fetchAdminMemberDetail(resident.id)}
                       >
                         <td
                           style={{ textAlign: "center" }}
@@ -749,17 +927,21 @@ function App() {
               </table>
             </div>
             <div className="admin-pagination">
-              {Array.from({ length: adminTotalPages }, (_, i) => i + 1).map(
-                (page) => (
-                  <button
-                    key={page}
-                    className={`admin-page-btn ${page === adminCurrentPage ? "active" : ""}`}
-                    onClick={() => setAdminCurrentPage(page)}
-                  >
-                    {page}
-                  </button>
-                ),
-              )}
+              {Array.from(
+                { length: adminTotalPagesState },
+                (_, i) => i + 1,
+              ).map((page) => (
+                <button
+                  key={page}
+                  className={`admin-page-btn ${page === adminCurrentPage ? "active" : ""}`}
+                  onClick={() => {
+                    setAdminCurrentPage(page);
+                    fetchAdminMembers(page, adminSearchKeyword); // 페이지 이동 시 API 재호출
+                  }}
+                >
+                  {page}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -777,46 +959,148 @@ function App() {
                 onError={(e) => (e.target.src = "/images/profile.png")}
               />
               <div className="admin-edit-form">
-                <label>입사 부서</label>
-                <input
-                  type="text"
-                  defaultValue={adminSelectedResident.department}
-                />
-                <label>입사 일자</label>
-                <input type="text" defaultValue={adminSelectedResident.date} />
-                <label>부서 변경 이력</label>
-                <ul className="admin-edit-history-list">
-                  {adminSelectedResident.deptHistory &&
-                  adminSelectedResident.deptHistory.length > 0 ? (
-                    adminSelectedResident.deptHistory.map((history, idx) => (
-                      <li key={idx} className="admin-edit-history-item">
-                        <input type="text" defaultValue={history} />
-                        <button className="admin-history-del-btn" title="삭제">
-                          ✕
-                        </button>
-                      </li>
-                    ))
-                  ) : (
-                    <li className="admin-edit-history-item">
-                      <input type="text" placeholder="이력 없음" />
-                    </li>
-                  )}
-                </ul>
-                <button className="admin-history-add-btn">+ 이력 추가</button>
+                {adminSelectedResident.id === 1 ? (
+                  <>
+                    <label>현재 비밀번호</label>
+                    <input
+                      type="password"
+                      placeholder="현재 비밀번호 입력"
+                      value={adminCurrentPassword}
+                      onChange={(e) => setAdminCurrentPassword(e.target.value)}
+                      onFocus={() => {
+                        setIsKeyboardOpen(true);
+                        setFocusedInput("adminCurrentPassword");
+                      }}
+                      onClick={() => {
+                        setIsKeyboardOpen(true);
+                        setFocusedInput("adminCurrentPassword");
+                      }}
+                      inputMode="none"
+                    />
+                    <label>새 비밀번호</label>
+                    <input
+                      type="password"
+                      placeholder="영문, 숫자 포함 8자리 이상"
+                      value={adminNewPassword}
+                      onChange={(e) => setAdminNewPassword(e.target.value)}
+                      onFocus={() => {
+                        setIsKeyboardOpen(true);
+                        setFocusedInput("adminNewPassword");
+                      }}
+                      onClick={() => {
+                        setIsKeyboardOpen(true);
+                        setFocusedInput("adminNewPassword");
+                      }}
+                      inputMode="none"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <label>입사 부서</label>
+                    <input
+                      type="text"
+                      defaultValue={adminSelectedResident.department}
+                    />
+                    <label>입사 일자</label>
+                    <input
+                      type="text"
+                      defaultValue={adminSelectedResident.date}
+                    />
+                    <label>부서 변경 이력</label>
+                    <ul className="admin-edit-history-list">
+                      {adminSelectedResident.deptHistory &&
+                      adminSelectedResident.deptHistory.length > 0 ? (
+                        adminSelectedResident.deptHistory.map(
+                          (history, idx) => (
+                            <li key={idx} className="admin-edit-history-item">
+                              <input type="text" defaultValue={history} />
+                              <button
+                                className="admin-history-del-btn"
+                                title="삭제"
+                              >
+                                ✕
+                              </button>
+                            </li>
+                          ),
+                        )
+                      ) : (
+                        <li className="admin-edit-history-item">
+                          <input type="text" placeholder="이력 없음" />
+                        </li>
+                      )}
+                    </ul>
+                    <button className="admin-history-add-btn">
+                      + 이력 추가
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             <div className="admin-edit-actions">
               <button
                 className="admin-edit-cancel"
-                onClick={() => setAdminSelectedResident(null)}
+                onClick={() => {
+                  setAdminSelectedResident(null);
+                  setAdminCurrentPassword("");
+                  setAdminNewPassword("");
+                  setIsKeyboardOpen(false);
+                  setFocusedInput(null);
+                }}
               >
                 취소
               </button>
               <button
                 className="admin-edit-save"
                 onClick={() => {
-                  alert("회원 정보가 성공적으로 수정되었습니다.");
-                  setAdminSelectedResident(null);
+                  if (adminSelectedResident.id === 1) {
+                    // 관리자 비밀번호 변경 로직
+                    if (!adminCurrentPassword) {
+                      alert("현재 비밀번호를 입력해주세요.");
+                      return;
+                    }
+                    // 영문 + 숫자 8자리 이상 체크
+                    const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d).{8,}$/;
+                    if (!passwordRegex.test(adminNewPassword)) {
+                      alert(
+                        "새 비밀번호는 영문과 숫자를 포함하여 8자리 이상이어야 합니다.",
+                      );
+                      return;
+                    }
+
+                    fetch("/api/admin/password", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        currentPassword: adminCurrentPassword,
+                        newPassword: adminNewPassword,
+                      }),
+                    })
+                      .then((res) => res.json())
+                      .then((json) => {
+                        if (json.success) {
+                          alert("관리자 비밀번호가 성공적으로 변경되었습니다.");
+                          setAdminSelectedResident(null);
+                          setAdminCurrentPassword("");
+                          setAdminNewPassword("");
+                          setIsKeyboardOpen(false);
+                          setFocusedInput(null);
+                        } else {
+                          alert(
+                            json.message || "비밀번호 변경에 실패했습니다.",
+                          );
+                        }
+                      })
+                      .catch((err) => {
+                        console.error("비밀번호 변경 에러:", err);
+                        alert("비밀번호 변경 중 오류가 발생했습니다.");
+                      });
+                  } else {
+                    // 일반 회원 정보 수정 로직
+                    alert("회원 정보가 성공적으로 수정되었습니다.");
+                    setAdminSelectedResident(null);
+                    setIsKeyboardOpen(false);
+                    setFocusedInput(null);
+                  }
                 }}
               >
                 저장
@@ -920,7 +1204,10 @@ function App() {
           <>
             <div
               className="keyboard-overlay"
-              onClick={() => setIsKeyboardOpen(false)}
+              onClick={() => {
+                setIsKeyboardOpen(false);
+                setFocusedInput(null);
+              }}
             ></div>
             <div className="virtual-keyboard">
               {currentKeyboardLayout.map((row, rowIndex) => (
