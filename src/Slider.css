@@ -34,6 +34,15 @@
   display: flex;
   align-items: center;
   gap: 0.6rem; /* 로고와 텍스트 사이의 간격을 좁힘 (1.2rem -> 0.6rem) */
+  transition:
+    opacity 1s ease-in-out,
+    visibility 1s ease-in-out; /* 부드럽게 사라지는 효과 */
+}
+
+/* 1번 슬라이드에서 우측 상단을 숨기기 위한 클래스 */
+.top-right-container.hidden {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .top-right-logo {
@@ -111,6 +120,55 @@
   transition: none; /* 대기 위치로 이동할 때는 애니메이션 없이 즉시 이동 */
 }
 
+/* 1번 슬라이드 등 특정 슬라이드의 검은색 뒷배경 처리를 위한 클래스 */
+.slide.black-bg {
+  background-color: #000000;
+}
+
+/* 슬라이더 전체를 채우는 미디어 (이미지, 동영상) */
+.slide-full-media {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* 이미지 비율을 유지하면서 꽉 채웁니다. 화면 끝까지 자르더라도 꽉 채우려면 cover로 변경하세요. */
+}
+
+/* --- 슬라이더 페이지네이션 (하단 동그라미) --- */
+.slider-pagination {
+  position: absolute;
+  bottom: 3rem; /* 화면 맨 아래에서부터의 여백 */
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1.2rem; /* 동그라미 사이의 간격 */
+  z-index: 100;
+}
+
+.slider-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: rgba(
+    255,
+    255,
+    255,
+    0.3
+  ); /* 비활성화 시 회색 느낌의 반투명 하얀색 */
+  border: none;
+  cursor: pointer;
+  transition:
+    background-color 0.3s ease,
+    transform 0.2s ease;
+  padding: 0;
+}
+
+.slider-dot.active {
+  background-color: #ffffff; /* 현재 페이지일 때 완전한 하얀색 */
+  transform: scale(1.2); /* 현재 페이지 동그라미를 약간 더 크게 강조 */
+}
+
 /* 텍스트 및 그리드 스타일링 */
 .year-title {
   position: absolute;
@@ -166,6 +224,15 @@
   text-shadow:
     2px 2px 8px rgba(0, 0, 0, 1),
     0 0 15px rgba(0, 0, 0, 0.8); /* 검은색 그림자를 더 진하고 넓게 겹쳐서 가독성 극대화 */
+}
+
+/* 검색 결과 - 이름 아래 임용 연도 스타일 */
+.resident-year {
+  color: #dddddd; /* 이름보다 살짝 어두운 밝은 회색 */
+  font-size: 1.1rem; /* 이름보다 작게 설정 */
+  margin: 0.3rem 0 0 0; /* 이름과의 간격 */
+  font-weight: 500;
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 1); /* 배경에 묻히지 않도록 그림자 추가 */
 }
 
 /* --- 우측 하단 플로팅 메뉴 --- */
@@ -449,6 +516,13 @@
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   color: #333;
   animation: slideUpKeyboard 0.3s ease-out;
+  transition: margin-top 0.3s ease;
+}
+
+/* 가상 키보드가 올라올 때 모달 창이 가려지지 않도록 위로 이동 */
+.pin-modal.keyboard-up,
+.admin-edit-modal.keyboard-up {
+  margin-top: -25vh;
 }
 
 .pin-modal h2 {
@@ -775,6 +849,21 @@
   gap: 1.5rem;
 }
 
+.admin-add-btn {
+  background-color: #1890ff;
+  color: #fff;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.admin-add-btn:hover {
+  background-color: #40a9ff;
+}
+
 .admin-delete-btn {
   background-color: #ff4d4f;
   color: #fff;
@@ -904,6 +993,86 @@
   border-color: #444;
 }
 
+/* --- 관리자 소원 등록 화면 --- */
+.admin-member-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem 2rem 5rem 2rem;
+  overflow-y: auto;
+}
+
+.admin-member-add-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.admin-member-add-row label {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.admin-member-add-row input {
+  padding: 1.2rem 1.5rem;
+  font-size: 1.4rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  outline: none;
+  font-family: inherit;
+}
+
+.admin-member-add-row input[readonly] {
+  background-color: #f5f5f5;
+  cursor: pointer;
+}
+
+.admin-member-add-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #eee;
+}
+
+.admin-member-add-history-item {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.admin-member-add-history-item input {
+  flex: 1;
+}
+
+/* --- 부서 검색 팝업 --- */
+.dept-search-modal-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+.dept-search-modal-item {
+  padding: 1rem;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  font-size: 1.4rem;
+  color: #333;
+}
+.dept-search-modal-item:hover {
+  background-color: #f5f5f5;
+}
+.dept-search-modal-item:last-child {
+  border-bottom: none;
+}
+
 /* --- 관리자 회원 정보 수정 팝업 --- */
 .admin-edit-modal-overlay {
   position: fixed;
@@ -928,6 +1097,7 @@
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
+  transition: margin-top 0.3s ease;
 }
 
 .admin-edit-modal h3 {
@@ -974,6 +1144,30 @@
   border-radius: 8px;
   font-family: inherit;
   box-sizing: border-box;
+}
+
+/* 파일 업로드 버튼 및 텍스트 스타일 */
+.admin-file-upload-btn {
+  background-color: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  padding: 0.8rem 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #333;
+  transition: background-color 0.2s;
+}
+.admin-file-upload-btn:hover {
+  background-color: #e8e8e8;
+}
+.admin-file-name {
+  font-size: 1.3rem;
+  color: #555;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* --- 부서 변경 이력 리스트 스타일 --- */
@@ -1048,6 +1242,13 @@
 .admin-edit-save {
   background-color: #333;
   color: #fff;
+}
+
+.admin-edit-save:disabled {
+  background-color: #ccc;
+  color: #888;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* --- 유휴 상태 알림 팝업창 (모달) --- */
