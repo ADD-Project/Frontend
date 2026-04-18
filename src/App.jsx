@@ -91,6 +91,7 @@ function App() {
   const [memberAddJoinDate, setMemberAddJoinDate] = useState(""); // 소원 등록 - 입소일자
   const [memberAddJoinDept, setMemberAddJoinDept] = useState(null); // 소원 등록 - 입소부서 객체
   const [memberAddHistories, setMemberAddHistories] = useState([]); // 소원 등록 - 부서 이동 이력 배열
+  const [memberAddExcelFile, setMemberAddExcelFile] = useState(null); // 소원 등록용 엑셀 파일 상태
   const [isDeptSearchModalOpen, setIsDeptSearchModalOpen] = useState(false); // 부서 검색 팝업 모달
   const [deptSearchTargetIndex, setDeptSearchTargetIndex] = useState(-1); // -1: 입소부서, 0이상: 이력 배열 인덱스
   const [deptSearchKeywordLocal, setDeptSearchKeywordLocal] = useState(""); // 부서 검색 모달 안의 검색어
@@ -400,6 +401,7 @@ function App() {
             setMemberAddJoinDate("");
             setMemberAddJoinDept(null);
             setMemberAddHistories([]);
+            setMemberAddExcelFile(null);
             return 0;
           }
           return prev - 1;
@@ -795,6 +797,32 @@ function App() {
 
   // 소원 등록 저장 API 호출
   const handleSaveMemberAdd = () => {
+    // 1. 엑셀 파일이 등록된 경우 엑셀 업로드 API 우선 호출
+    if (memberAddExcelFile) {
+      const formData = new FormData();
+      formData.append("file", memberAddExcelFile);
+
+      fetch("/api/admin/import/files", {
+        method: "POST",
+        body: formData, // 브라우저가 자동으로 multipart/form-data 및 boundary 설정
+      })
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success) {
+            alert("엑셀 파일을 통해 소원이 성공적으로 등록되었습니다.");
+            setCurrentView("admin");
+          } else {
+            alert(json.message || "엑셀 업로드에 실패했습니다.");
+          }
+        })
+        .catch((err) => {
+          console.error("소원 엑셀 업로드 에러:", err);
+          alert("소원 엑셀 업로드 중 오류가 발생했습니다.");
+        });
+      return;
+    }
+
+    // 2. 수동 입력일 경우 빈 값 체크 및 단일 등록 API 호출
     if (
       !memberAddCode ||
       !memberAddName ||
@@ -1143,6 +1171,7 @@ function App() {
                 setMemberAddJoinDate("");
                 setMemberAddJoinDept(null);
                 setMemberAddHistories([]);
+                setMemberAddExcelFile(null);
                 fetchDepartments(); // 부서 검색 팝업을 위해 부서 리스트 미리 조회
                 setCurrentView("admin-member-add");
               }}
@@ -1527,6 +1556,45 @@ function App() {
               </div>
             </div>
             <div className="admin-member-add-form">
+              {/* 엑셀 파일 일괄 등록 영역 */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "1rem",
+                  paddingBottom: "1.5rem",
+                  borderBottom: "1px solid #eee",
+                  margin: "0.5rem 0 1rem 0",
+                }}
+              >
+                <label
+                  htmlFor="member-excel-upload"
+                  className="admin-file-upload-btn"
+                >
+                  📁 엑셀 파일 일괄 등록
+                </label>
+                <input
+                  id="member-excel-upload"
+                  type="file"
+                  accept=".xlsx, .xls"
+                  style={{ display: "none" }}
+                  onChange={(e) => setMemberAddExcelFile(e.target.files[0])}
+                />
+                {memberAddExcelFile && (
+                  <span className="admin-file-name">
+                    {memberAddExcelFile.name}
+                  </span>
+                )}
+                {memberAddExcelFile && (
+                  <button
+                    className="admin-history-del-btn"
+                    onClick={() => setMemberAddExcelFile(null)}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
               <div className="admin-member-add-row">
                 <label>이름</label>
                 <input
@@ -1689,7 +1757,10 @@ function App() {
               <div className="admin-edit-actions" style={{ marginTop: "2rem" }}>
                 <button
                   className="admin-edit-cancel"
-                  onClick={() => setCurrentView("admin")}
+                  onClick={() => {
+                    setCurrentView("admin");
+                    setMemberAddExcelFile(null);
+                  }}
                 >
                   취소
                 </button>
@@ -1697,10 +1768,11 @@ function App() {
                   className="admin-edit-save"
                   onClick={handleSaveMemberAdd}
                   disabled={
-                    !memberAddName.trim() ||
-                    !memberAddCode.trim() ||
-                    !memberAddJoinDate ||
-                    !memberAddJoinDept
+                    !memberAddExcelFile &&
+                    (!memberAddName.trim() ||
+                      !memberAddCode.trim() ||
+                      !memberAddJoinDate ||
+                      !memberAddJoinDept)
                   }
                 >
                   소원 등록
