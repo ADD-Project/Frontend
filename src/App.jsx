@@ -118,6 +118,7 @@ function App() {
   const [isLangKo, setIsLangKo] = useState(true); // 한/영 상태
   const [isShift, setIsShift] = useState(false); // Shift 상태 추가
   const [selectedResident, setSelectedResident] = useState(null); // 클릭한 회원 객체
+  const [pendingResident, setPendingResident] = useState(null); // 고유번호 확인 대기 중인 회원
   const [showPinModal, setShowPinModal] = useState(false); // 고유번호 팝업창 표시 여부
   const [pinInput, setPinInput] = useState(""); // 입력된 고유번호
   const [showAdminModal, setShowAdminModal] = useState(false); // 관리자 로그인 팝업창
@@ -418,6 +419,7 @@ function App() {
             setIsMenuOpen(false);
             setIsKeyboardOpen(false);
             setShowPinModal(false);
+            setPendingResident(null);
             setShowAdminModal(false);
             setAdminSelectedResident(null);
             setAdminCurrentPassword("");
@@ -448,6 +450,20 @@ function App() {
   // 메뉴 열기/닫기 토글 함수
   const toggleMenu = () => {
     setIsMenuOpen((prev) => !prev);
+  };
+
+  // 전체화면 토글 함수
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.error(`전체화면 전환 에러: ${err.message}`);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+    setIsMenuOpen(false); // 실행 후 메뉴 닫기
   };
 
   // 메뉴 선택 시 화면 전환 및 메뉴 닫기
@@ -553,7 +569,7 @@ function App() {
   // 프로필 카드 클릭 시 팝업 띄우기
   const handleResidentClick = (resident) => {
     console.log("선택된 소원 데이터 (F12에서 확인):", resident); // 백엔드에서 전달받은 실제 고유번호(pin) 확인용
-    setSelectedResident(resident);
+    setPendingResident(resident);
     setPinInput("");
     setShowPinModal(true);
   };
@@ -563,18 +579,19 @@ function App() {
     if (key === "취소") {
       setShowPinModal(false);
       setPinInput("");
+      setPendingResident(null);
     } else if (key === "지우기") {
       setPinInput((prev) => prev.slice(0, -1));
     } else if (key === "확인") {
-      if (pinInput === selectedResident.pin) {
+      if (pinInput === pendingResident.pin) {
         // 번호 일치 시 API 호출하여 상세 정보 가져오기
-        fetch(`/member/${selectedResident.id}`)
+        fetch(`/member/${pendingResident.id}`)
           .then((res) => res.json())
           .then((json) => {
             if (json.success && json.data) {
               const detailData = json.data;
-              setSelectedResident((prev) => ({
-                ...prev,
+              setSelectedResident({
+                ...pendingResident,
                 date: detailData.joinDate,
                 department: detailData.joinDepartmentName,
                 coworkers: detailData.colleaguesAtJoin
@@ -585,9 +602,10 @@ function App() {
                       pin: cw.memberCode ? String(cw.memberCode) : "", // 부서원도 고유번호를 가지도록 추가
                     }))
                   : [],
-              }));
+              });
               setShowPinModal(false);
               setPinInput("");
+              setPendingResident(null);
               setCurrentView("detail");
               setIsKeyboardOpen(false); // 가상 키보드 닫기
             } else {
@@ -741,38 +759,63 @@ function App() {
 
   // 관리자 회원 조회 API 호출
   const fetchAdminMembers = (page, keyword) => {
-    const pageParam = page - 1; // Spring Boot(Pageable)는 기본적으로 0-based page 사용
-    let url = `/admin/members?page=${pageParam}&size=10`;
     if (keyword) {
-      url += `&keyword=${encodeURIComponent(keyword)}`; // 백엔드 검색 구현에 맞춰 파라미터 추가
-    }
-
-    fetch(url)
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success && json.data) {
-          const mappedData = json.data.content.map((r) => ({
-            id: r.memberId,
-            pin: r.memberCode || "",
-            name: r.name,
-            image: r.profileImagePath || "/images/profile.png",
-            department: r.joinDepartmentName || "미배정",
-            deptHistory: [], // 필요 시 이력 추가
-          }));
-          setAdminMembersList(mappedData);
-          setAdminTotalPagesState(
-            json.data.totalPages === 0 ? 1 : json.data.totalPages,
-          );
-        } else {
+      // 검색어가 있을 경우 이름 검색 API 사용
+      fetch(`/members/search?name=${encodeURIComponent(keyword.trim())}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data) {
+            const mappedData = json.data.map((r) => ({
+              id: r.memberId,
+              pin: r.memberCode || "",
+              name: r.name,
+              image: r.profileImagePath || "/images/profile.png",
+              department: r.joinDepartmentName || "미배정",
+              deptHistory: [], // 필요 시 이력 추가
+            }));
+            setAdminMembersList(mappedData);
+            setAdminTotalPagesState(1); // 검색 결과는 한 페이지에 모두 표시
+          } else {
+            setAdminMembersList([]);
+            setAdminTotalPagesState(1);
+          }
+        })
+        .catch((err) => {
+          console.error("관리자 소원 검색 에러:", err);
           setAdminMembersList([]);
           setAdminTotalPagesState(1);
-        }
-      })
-      .catch((err) => {
-        console.error("관리자 소원 조회 에러:", err);
-        setAdminMembersList([]);
-        setAdminTotalPagesState(1);
-      });
+        });
+    } else {
+      // 검색어가 없을 경우 전체 목록 페이징 API 사용
+      const pageParam = page - 1; // Spring Boot(Pageable)는 기본적으로 0-based page 사용
+      const url = `/admin/members?page=${pageParam}&size=10`;
+      fetch(url)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data) {
+            const mappedData = json.data.content.map((r) => ({
+              id: r.memberId,
+              pin: r.memberCode || "",
+              name: r.name,
+              image: r.profileImagePath || "/images/profile.png",
+              department: r.joinDepartmentName || "미배정",
+              deptHistory: [], // 필요 시 이력 추가
+            }));
+            setAdminMembersList(mappedData);
+            setAdminTotalPagesState(
+              json.data.totalPages === 0 ? 1 : json.data.totalPages,
+            );
+          } else {
+            setAdminMembersList([]);
+            setAdminTotalPagesState(1);
+          }
+        })
+        .catch((err) => {
+          console.error("관리자 소원 조회 에러:", err);
+          setAdminMembersList([]);
+          setAdminTotalPagesState(1);
+        });
+    }
   };
 
   // 부서 목록 클라이언트 측 필터링 및 페이지네이션
@@ -930,6 +973,34 @@ function App() {
       : keyboardLayouts.en;
 
   const adminItemsPerPage = 10; // 한 페이지에 보여줄 회원 수를 10명으로 유지 (API 사이즈와 맞춤)
+
+  // 프로그램 종료 핸들러
+  const handleShutdown = () => {
+    if (window.confirm("정말 프로그램을 종료하시겠습니까?")) {
+      fetch("/system/shutdown", {
+        method: "POST",
+      })
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.status === "200" || json.success) {
+            alert("프로그램을 종료합니다.");
+            window.close(); // 브라우저 창 닫기 시도
+            document.body.innerHTML =
+              "<div style='display:flex; justify-content:center; align-items:center; height:100vh; background:#000; color:#fff; font-size:2rem;'>프로그램이 종료되었습니다. 창을 닫아주세요.</div>";
+          } else {
+            alert("종료 요청에 실패했습니다.");
+          }
+        })
+        .catch((err) => {
+          console.error("종료 API 에러:", err);
+          // 서버가 즉시 종료되어 응답 수신 전 네트워크 에러가 날 수 있으므로 동일하게 종료 처리
+          alert("프로그램을 종료합니다.");
+          window.close();
+          document.body.innerHTML =
+            "<div style='display:flex; justify-content:center; align-items:center; height:100vh; background:#000; color:#fff; font-size:2rem;'>프로그램이 종료되었습니다. 창을 닫아주세요.</div>";
+        });
+    }
+  };
 
   return (
     <div className="app-container" onContextMenu={(e) => e.preventDefault()}>
@@ -1186,6 +1257,9 @@ function App() {
       ) : currentView === "admin" ? (
         <div className="admin-wrapper">
           <h1 className="admin-header">관리자 페이지</h1>
+          <button className="admin-fullscreen-btn" onClick={toggleFullScreen}>
+            전체화면
+          </button>
           <div className="admin-menu-container">
             <button
               className="admin-menu-btn"
@@ -1233,10 +1307,7 @@ function App() {
             >
               홈
             </button>
-            <button
-              className="admin-menu-btn"
-              onClick={() => setCurrentView("slider")}
-            >
+            <button className="admin-menu-btn" onClick={handleShutdown}>
               종료
             </button>
           </div>
@@ -1264,7 +1335,7 @@ function App() {
             <div className="admin-list-search">
               <input
                 type="text"
-                placeholder="소원 이름 또는 고유번호 검색..."
+                placeholder="소원 이름으로 검색..."
                 value={adminSearchValue}
                 onChange={(e) => {
                   setAdminSearchValue(e.target.value);
@@ -2397,11 +2468,11 @@ function App() {
       )}
 
       {/* 고유번호 입력 팝업창 (모달) */}
-      {showPinModal && selectedResident && (
+      {showPinModal && pendingResident && (
         <div className="pin-modal-overlay">
           <div className="pin-modal">
             <h2>고유번호 입력</h2>
-            <p>{selectedResident.name} 님의 고유번호를 입력해주세요.</p>
+            <p>{pendingResident.name} 님의 고유번호를 입력해주세요.</p>
             <div className="pin-display">
               {pinInput ? "●".repeat(pinInput.length) : "번호를 입력하세요"}
             </div>

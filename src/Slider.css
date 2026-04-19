@@ -815,6 +815,33 @@ textarea {
   transform: scale(0.95); /* 클릭 시 눌리는 효과 */
 }
 
+.admin-fullscreen-btn {
+  position: absolute;
+  top: 3rem;
+  right: 4rem;
+  padding: 1rem 2rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #333;
+  background-color: rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+  font-family: inherit;
+  z-index: 10;
+}
+.admin-fullscreen-btn:hover {
+  background-color: rgba(255, 255, 255, 1);
+  transform: scale(1.05);
+}
+.admin-fullscreen-btn:active {
+  transform: scale(0.95);
+}
+
 /* --- 관리자 회원 조회 리스트 화면 --- */
 .admin-list-wrapper {
   position: relative;
