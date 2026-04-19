@@ -760,6 +760,7 @@ function App() {
       .then((res) => res.json())
       .then((json) => {
         if (json.success && Array.isArray(json.data)) {
+          console.log("부서 목록 응답 데이터 확인용:", json.data);
           setAllDepartments(json.data);
         } else {
           setAllDepartments([]);
@@ -1546,7 +1547,9 @@ function App() {
                         checked={
                           departmentList.length > 0 &&
                           departmentList.every((d) =>
-                            deptSelectedForDelete.includes(d.departmentId),
+                            deptSelectedForDelete.includes(
+                              d.departmentNameHistoryId,
+                            ),
                           )
                         }
                         onChange={(e) => {
@@ -1554,13 +1557,15 @@ function App() {
                             const newSelections = new Set(
                               deptSelectedForDelete,
                             );
-                            departmentList.forEach((d) =>
-                              newSelections.add(d.departmentId),
-                            );
+                            departmentList.forEach((d) => {
+                              if (d.departmentNameHistoryId !== undefined) {
+                                newSelections.add(d.departmentNameHistoryId);
+                              }
+                            });
                             setDeptSelectedForDelete(Array.from(newSelections));
                           } else {
                             const currentIds = departmentList.map(
-                              (d) => d.departmentId,
+                              (d) => d.departmentNameHistoryId,
                             );
                             setDeptSelectedForDelete(
                               deptSelectedForDelete.filter(
@@ -1580,26 +1585,29 @@ function App() {
                 <tbody>
                   {departmentList.length > 0 ? (
                     departmentList.map((dept, idx) => (
-                      <tr key={`${dept.departmentId}-${dept.startDate}-${idx}`}>
+                      <tr key={`${dept.departmentNameHistoryId}-${idx}`}>
                         <td
                           style={{ textAlign: "center" }}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <input
                             type="checkbox"
-                            checked={deptSelectedForDelete.includes(
-                              dept.departmentId,
-                            )}
+                            checked={
+                              dept.departmentNameHistoryId !== undefined &&
+                              deptSelectedForDelete.includes(
+                                dept.departmentNameHistoryId,
+                              )
+                            }
                             onChange={(e) => {
                               if (e.target.checked) {
                                 setDeptSelectedForDelete([
                                   ...deptSelectedForDelete,
-                                  dept.departmentId,
+                                  dept.departmentNameHistoryId,
                                 ]);
                               } else {
                                 setDeptSelectedForDelete(
                                   deptSelectedForDelete.filter(
-                                    (id) => id !== dept.departmentId,
+                                    (id) => id !== dept.departmentNameHistoryId,
                                   ),
                                 );
                               }
@@ -2426,7 +2434,7 @@ function App() {
                 )
                 .map((dept, idx) => (
                   <div
-                    key={`${dept.departmentId}-${idx}`}
+                    key={`${dept.departmentNameHistoryId}-${idx}`}
                     className="dept-search-modal-item"
                     onClick={() => {
                       if (currentView === "admin-member-add") {
