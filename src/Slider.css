@@ -164,6 +164,7 @@ textarea {
     background-color 0.3s ease,
     transform 0.2s ease;
   padding: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); /* 배경색에 묻히지 않도록 그림자 추가 */
 }
 
 .slider-dot.active {
@@ -186,13 +187,13 @@ textarea {
   display: grid;
   grid-template-columns: repeat(8, 1fr); /* 8명씩 동일한 간격으로 배치 */
   grid-template-rows: repeat(3, auto); /* 3줄 배치 */
-  gap: 3rem 1rem; /* 위아래 3rem, 양옆 1rem 간격 */
+  gap: 1.5rem 1rem; /* 위아래 간격을 줄여 하단 겹침 방지 (3rem -> 1.5rem), 양옆 1rem 간격 */
   justify-content: start;
   justify-items: center; /* 그리드 셀 안에서 카드 가운데 정렬 */
   align-content: start; /* 상단부터 차례대로 채우기 */
   width: 100%;
   max-width: 1800px; /* 전체 너비를 넓게 사용하여 8개가 들어가도록 설정 */
-  margin-top: 10rem; /* 위에서부터 차례대로 쌓이므로 타이틀과 겹치지 않게 마진을 약간 더 늘림 */
+  margin-top: 8rem; /* 전체 목록을 위로 살짝 끌어올림 (10rem -> 8rem) */
 }
 
 .resident-card {
@@ -1062,11 +1063,20 @@ textarea {
 
 /* --- 부서 검색 팝업 --- */
 .dept-search-modal-list {
-  max-height: 300px;
+  max-height: 400px; /* 높이를 살짝 늘려 한 번에 더 많은 목록이 보이게 함 */
   overflow-y: auto;
   border: 1px solid #ddd;
   border-radius: 8px;
   margin-top: 1rem;
+}
+
+/* 부서 검색 목록의 스크롤바를 항상 명확히 보이게 디자인 추가 */
+.dept-search-modal-list::-webkit-scrollbar {
+  width: 8px;
+}
+.dept-search-modal-list::-webkit-scrollbar-thumb {
+  background-color: #bbb;
+  border-radius: 4px;
 }
 .dept-search-modal-item {
   padding: 1rem;

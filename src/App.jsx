@@ -187,7 +187,7 @@ function App() {
   // 컴포넌트 마운트 시 전체 연도의 데이터를 비동기로 미리 호출하여 캐싱 (검색 및 슬라이더용)
   useEffect(() => {
     // 1. 먼저 연도 범위를 조회합니다.
-    fetch("/api/members/admission-years/range", {
+    fetch("/members/admission-years/range", {
       method: "GET",
     })
       .then((res) => res.json())
@@ -208,7 +208,7 @@ function App() {
 
         // 2. 구해진 연도 범위에 맞춰 개별 연도 데이터를 호출합니다.
         fetchedYearsList.forEach((year) => {
-          fetch(`/api/members/admission-years/${year}`, {
+          fetch(`/members/admission-years/${year}`, {
             method: "GET",
           })
             .then((res) => res.json())
@@ -345,9 +345,7 @@ function App() {
     }
 
     const timeoutId = setTimeout(() => {
-      fetch(
-        `/api/members/search?name=${encodeURIComponent(searchValue.trim())}`,
-      )
+      fetch(`/members/search?name=${encodeURIComponent(searchValue.trim())}`)
         .then((res) => res.json())
         .then((json) => {
           if (json.success && json.data) {
@@ -570,7 +568,7 @@ function App() {
     } else if (key === "확인") {
       if (pinInput === selectedResident.pin) {
         // 번호 일치 시 API 호출하여 상세 정보 가져오기
-        fetch(`/api/member/${selectedResident.id}`)
+        fetch(`/member/${selectedResident.id}`)
           .then((res) => res.json())
           .then((json) => {
             if (json.success && json.data) {
@@ -622,7 +620,7 @@ function App() {
     if (window.confirm("정말 삭제하시겠습니까?")) {
       try {
         const deletePromises = adminSelectedForDelete.map((id) =>
-          fetch(`/api/admin/members/${id}`, {
+          fetch(`/admin/members/${id}`, {
             method: "DELETE",
           }).then((res) => res.json()),
         );
@@ -654,7 +652,7 @@ function App() {
     if (window.confirm("정말 삭제하시겠습니까?")) {
       try {
         const deletePromises = deptSelectedForDelete.map((id) =>
-          fetch(`/api/departments/${id}`, {
+          fetch(`/departments/${id}`, {
             method: "DELETE",
           }).then((res) => res.json()),
         );
@@ -685,14 +683,20 @@ function App() {
     } else if (key === "지우기") {
       setAdminPinInput((prev) => prev.slice(0, -1));
     } else if (key === "확인") {
-      fetch("/api/admin/login", {
+      fetch("/admin/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ password: adminPinInput }),
       })
-        .then((res) => res.json())
+        .then(async (res) => {
+          // 응답 코드가 200번대가 아닐 경우 (예: 404 Not Found) 에러 발생
+          if (!res.ok) {
+            throw new Error(`서버 응답 오류 (상태 코드: ${res.status})`);
+          }
+          return res.json();
+        })
         .then((json) => {
           if (json.success) {
             setShowAdminModal(false);
@@ -718,7 +722,7 @@ function App() {
 
   // 부서 목록 조회 API 호출
   const fetchDepartments = () => {
-    fetch("/api/departments")
+    fetch("/departments")
       .then((res) => res.json())
       .then((json) => {
         if (json.success && Array.isArray(json.data)) {
@@ -738,7 +742,7 @@ function App() {
   // 관리자 회원 조회 API 호출
   const fetchAdminMembers = (page, keyword) => {
     const pageParam = page - 1; // Spring Boot(Pageable)는 기본적으로 0-based page 사용
-    let url = `/api/admin/members?page=${pageParam}&size=10`;
+    let url = `/admin/members?page=${pageParam}&size=10`;
     if (keyword) {
       url += `&keyword=${encodeURIComponent(keyword)}`; // 백엔드 검색 구현에 맞춰 파라미터 추가
     }
@@ -799,7 +803,7 @@ function App() {
 
   // 관리자 회원 상세 조회 API 호출
   const fetchAdminMemberDetail = (id) => {
-    fetch(`/api/admin/members/${id}`)
+    fetch(`/admin/members/${id}`)
       .then((res) => res.json())
       .then((json) => {
         if (json.success && json.data) {
@@ -838,7 +842,7 @@ function App() {
       const formData = new FormData();
       formData.append("file", memberAddExcelFile);
 
-      fetch("/api/admin/import/files", {
+      fetch("/admin/import/files", {
         method: "POST",
         body: formData, // 브라우저가 자동으로 multipart/form-data 및 boundary 설정
       })
@@ -896,7 +900,7 @@ function App() {
       histories: histories,
     };
 
-    fetch("/api/admin/import/single", {
+    fetch("/admin/import/single", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -904,7 +908,7 @@ function App() {
       .then((res) => res.json())
       .then((json) => {
         if (json.success) {
-          alert("소원 등록이 성공적으로 완료되었습니다.");
+          alert(json.message || "소원 등록이 성공적으로 완료되었습니다.");
           setCurrentView("admin");
         } else {
           alert(json.message || "소원 등록에 실패했습니다.");
@@ -1020,10 +1024,7 @@ function App() {
 
                 {page.type === "residents" && (
                   <>
-                    <h1 className="year-title">
-                      {page.year}년 임용자{" "}
-                      {page.pageIndex > 0 ? `(${page.pageIndex + 1}p)` : ""}
-                    </h1>
+                    <h1 className="year-title">{page.year}년 임용자</h1>
                     <div className="resident-list">
                       {!page.residents ? (
                         <p className="no-result">
@@ -2017,7 +2018,7 @@ function App() {
                       return;
                     }
 
-                    fetch("/api/admin/password", {
+                    fetch("/admin/password", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
@@ -2060,7 +2061,7 @@ function App() {
                         })),
                     };
 
-                    fetch(`/api/members/${adminSelectedResident.id}`, {
+                    fetch(`/members/${adminSelectedResident.id}`, {
                       method: "PUT",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(putPayload),
@@ -2216,7 +2217,7 @@ function App() {
                     const formData = new FormData();
                     formData.append("file", deptExcelFile);
 
-                    fetch("/api/departments/excel", {
+                    fetch("/departments/excel", {
                       method: "POST",
                       body: formData, // FormData 전송 시 Content-Type은 브라우저가 자동 설정함
                     })
@@ -2257,7 +2258,7 @@ function App() {
                     return;
                   }
 
-                  fetch("/api/departments", {
+                  fetch("/departments", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -2337,13 +2338,9 @@ function App() {
               {allDepartments
                 .filter(
                   (d) =>
-                    d.deptName.includes(deptSearchKeywordLocal) ||
-                    d.deptCd.includes(deptSearchKeywordLocal),
-                )
-                // 부서 이력이 여러 개일 수 있으므로 부서코드(deptCd) 기준으로 1개씩만 중복 제거하여 노출
-                .filter(
-                  (dept, index, self) =>
-                    index === self.findIndex((t) => t.deptCd === dept.deptCd),
+                    (d.deptName &&
+                      d.deptName.includes(deptSearchKeywordLocal)) ||
+                    (d.deptCd && d.deptCd.includes(deptSearchKeywordLocal)),
                 )
                 .map((dept, idx) => (
                   <div
