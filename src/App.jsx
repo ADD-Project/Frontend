@@ -37,18 +37,75 @@ const keyboardLayouts = {
   ],
 };
 
-// 홈 화면 슬라이드 순서 설정
-// 1. 연도별 임용자 슬라이드 이전에 나올 이미지들
-//    - 여기에 추가하는 순서대로 표시됩니다.
-//    - 이미지가 없으면 이 부분을 빈 배열 []로 만드세요.
-const PRE_RESIDENT_IMAGES = [
-  "/images/pages/1.png",
-  // 예: 나중에 2번 이미지를 추가하려면 "/images/pages/2.png" 를 이 아래에 추가하시면 됩니다.
-];
+// --- 파일 자동 인식 로직 ---
+// public/images/pages 폴더 내의 미디어 파일을 자동으로 스캔합니다.
+const mediaPaths = Object.keys(
+  import.meta.glob(
+    "/public/images/pages/*.{png,jpg,jpeg,gif,webp,bmp,mp4,webm,ogg,mov}",
+  ),
+);
 
-// 2. 확인할 동영상 경로
-//    - 파일이 실제로 존재하는지 내부적으로 자동 검사하여 존재할 때만 실행합니다.
-const POST_RESIDENT_VIDEO = "/images/pages/4.mp4";
+const PRE_RESIDENT_IMAGES = [];
+const POST_RESIDENT_VIDEOS = [];
+
+// 파일명에 포함된 숫자를 기준으로 오름차순 정렬 (예: 1.jpg -> 2.png -> 10.mp4)
+mediaPaths
+  .sort((a, b) => {
+    const numA = parseInt(a.match(/\d+/)?.[0] || 0);
+    const numB = parseInt(b.match(/\d+/)?.[0] || 0);
+    return numA - numB;
+  })
+  .forEach((path) => {
+    const fileName = path.split("/").pop();
+    const url = `/images/pages/${fileName}`;
+    if (/\.(mp4|webm|ogg|mov)$/i.test(fileName)) {
+      POST_RESIDENT_VIDEOS.push(url);
+    } else {
+      PRE_RESIDENT_IMAGES.push(url);
+    }
+  });
+
+// 3. 스마트 프로필 이미지 로드용 컴포넌트
+// - 고유번호(pin)를 바탕으로 여러 확장자를 순서대로 시도하며 이미지를 렌더링
+// - 용량이 0바이트(손상된 파일)이거나 파일이 없으면 브라우저가 onError를 발생시키며 다음 확장자를 시도함
+const ProfileImage = ({ pin, initialSrc, alt, className }) => {
+  // 실제 배포 시의 .BMP를 최우선으로 찾고, 테스트용 확장자들도 순서대로 시도합니다.
+  const extensions = [".BMP", ".bmp", ".jpg", ".jpeg", ".png", ".webp", ".img"];
+  const [attempt, setAttempt] = useState(
+    initialSrc && initialSrc !== "/images/profile.png" ? -1 : 0,
+  );
+
+  // 회원(pin)이 바뀌면 초기화
+  useEffect(() => {
+    setAttempt(initialSrc && initialSrc !== "/images/profile.png" ? -1 : 0);
+  }, [pin, initialSrc]);
+
+  // attempt가 -1이면 DB의 이미지, 0 이상이면 images/진해_인사사진 폴더의 고유번호+확장자를 시도
+  const currentSrc =
+    attempt === -1
+      ? initialSrc
+      : pin && attempt < extensions.length
+        ? `/images/진해_인사사진/${pin}${extensions[attempt]}`
+        : "/images/profile.png";
+
+  const handleError = (e) => {
+    if (!pin || attempt >= extensions.length - 1) {
+      e.target.src = "/images/profile.png"; // 모두 실패하면 기본 이미지
+      e.target.onerror = null; // 무한 루프 방지
+    } else {
+      setAttempt((prev) => prev + 1); // 실패 시 다음 확장자 시도
+    }
+  };
+
+  return (
+    <img
+      src={currentSrc}
+      alt={alt}
+      className={className}
+      onError={handleError}
+    />
+  );
+};
 
 function App() {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -100,7 +157,6 @@ function App() {
   const [yearsList, setYearsList] = useState([]); // 조회할 연도 리스트 상태
   const [isIdleModalOpen, setIsIdleModalOpen] = useState(false); // 무반응(유휴) 알림 팝업창 표시 여부
   const [idleCountdown, setIdleCountdown] = useState(5); // 무반응 알림 팝업 카운트다운 숫자
-  const [isVideoAvailable, setIsVideoAvailable] = useState(false); // 동영상 실제 존재 여부 상태
 
   // 터치 및 휠을 이용한 화면 확대/축소(줌) 방지
   useEffect(() => {
@@ -185,26 +241,6 @@ function App() {
       });
   }, []);
 
-  // 컴포넌트 마운트 시 동영상 파일 존재 여부 자동 확인
-  useEffect(() => {
-    if (POST_RESIDENT_VIDEO) {
-      // 파일 다운로드 없이 헤더만 요청하여 존재 여부(200 OK)를 빠르게 판단합니다.
-      fetch(POST_RESIDENT_VIDEO, { method: "HEAD" })
-        .then((res) => {
-          const contentType = res.headers.get("content-type") || "";
-          // SPA 환경 특성상 404 에러 대신 index.html이 반환되는 것을 방지하기 위해 html 응답인지 확인
-          if (res.ok && !contentType.includes("text/html")) {
-            setIsVideoAvailable(true);
-          } else {
-            setIsVideoAvailable(false);
-          }
-        })
-        .catch((err) => {
-          setIsVideoAvailable(false); // 네트워크 에러나 파일이 없는 경우 건너뜀
-        });
-    }
-  }, []);
-
   // 데이터가 존재하는 연도만 필터링 (초기 로딩 시 화면 터짐 방지를 위해 임시로 올해 연도를 노출)
   const activeYears = yearsList.filter(
     (year) => residentsByYear[year] && residentsByYear[year].length > 0,
@@ -241,10 +277,10 @@ function App() {
     });
   }
 
-  // 3. 설정된 동영상이 실제로 서버(폴더)에 존재함이 확인되면 마지막에 추가
-  if (POST_RESIDENT_VIDEO && isVideoAvailable) {
-    sliderPages.push({ type: "video", src: POST_RESIDENT_VIDEO });
-  }
+  // 3. 폴더에서 스캔된 모든 동영상을 마지막에 순서대로 추가
+  POST_RESIDENT_VIDEOS.forEach((src) => {
+    sliderPages.push({ type: "video", src: src });
+  });
 
   const sliderPagesLength = sliderPages.length;
   const currentPageType = sliderPages[currentIndex]?.type;
@@ -891,32 +927,24 @@ function App() {
 
   const adminItemsPerPage = 10; // 한 페이지에 보여줄 회원 수를 10명으로 유지 (API 사이즈와 맞춤)
 
-  // 1번(첫 번째) 슬라이드가 화면에 보이고 있는지 여부 확인
-  const isFirstSlide = currentView === "slider" && currentIndex === 0;
-
   return (
-    <div className="app-container">
-      {/* 우측 상단 고정 로고 (관리자 관련 화면에서는 숨김) */}
-      {currentView !== "admin" &&
-        currentView !== "admin-list" &&
-        currentView !== "admin-dept-list" &&
-        currentView !== "admin-member-add" && (
-          <div
-            className={`top-right-container ${isFirstSlide ? "hidden" : ""}`}
-          >
-            <img
-              src="/images/국방과학연구소 로고_국문.png"
-              alt="국방과학연구소 로고"
-              className="top-right-logo"
-            />
-            <div className="top-right-text">
-              <div className="text-main">제 5 기술연구원</div>
-              <div className="text-sub">
-                The 5th Technology Research Institute
-              </div>
+    <div className="app-container" onContextMenu={(e) => e.preventDefault()}>
+      {/* 우측 상단 고정 로고 (오직 연도별 임용자 슬라이드에서만 표시) */}
+      {currentView === "slider" && currentPageType === "residents" && (
+        <div className="top-right-container">
+          <img
+            src="/images/국방과학연구소 로고_국문.png"
+            alt="국방과학연구소 로고"
+            className="top-right-logo"
+          />
+          <div className="top-right-text">
+            <div className="text-main">제 5 기술연구원</div>
+            <div className="text-sub">
+              The 5th Technology Research Institute
             </div>
           </div>
-        )}
+        </div>
+      )}
 
       {currentView === "slider" ? (
         <div className="slider-wrapper">
@@ -936,7 +964,7 @@ function App() {
                     ? `${page.year}-${page.pageIndex}`
                     : `media-${index}`
                 }
-                className={`slide ${positionClass} ${index === 0 ? "black-bg" : ""}`}
+                className={`slide ${positionClass} ${page.type === "image" || page.type === "video" ? "black-bg" : ""}`}
               >
                 {page.type === "image" && (
                   <img
@@ -956,9 +984,13 @@ function App() {
                       // 슬라이드가 활성화 될 때마다 동영상을 처음부터 다시 재생하도록 처리
                       if (el && index === currentIndex && el.paused) {
                         el.currentTime = 0;
-                        el.play().catch((e) =>
-                          console.error("동영상 자동재생 에러:", e),
-                        );
+                        const playPromise = el.play();
+                        if (playPromise !== undefined) {
+                          playPromise.catch((e) => {
+                            if (e.name !== "AbortError")
+                              console.error("동영상 자동재생 에러:", e);
+                          });
+                        }
                       } else if (el && index !== currentIndex && !el.paused) {
                         el.pause();
                       }
@@ -1008,12 +1040,10 @@ function App() {
                             className="resident-card"
                             onClick={() => handleResidentClick(resident)}
                           >
-                            <img
-                              src={resident.image}
+                            <ProfileImage
+                              pin={resident.pin}
+                              initialSrc={resident.image}
                               alt={resident.name}
-                              onError={(e) => {
-                                e.target.src = "/images/profile.png";
-                              }}
                             />
                             <h2 className="resident-name">{resident.name}</h2>
                           </div>
@@ -1083,13 +1113,10 @@ function App() {
                   className="resident-card"
                   onClick={() => handleResidentClick(resident)}
                 >
-                  <img
-                    src={resident.image}
+                  <ProfileImage
+                    pin={resident.pin}
+                    initialSrc={resident.image}
                     alt={resident.name}
-                    onError={(e) => {
-                      // 이미지 로드 실패 시 대체 이미지
-                      e.target.src = "/images/profile.png";
-                    }}
                   />
                   <h2 className="resident-name">{resident.name}</h2>
                   {resident.year && (
@@ -1105,13 +1132,11 @@ function App() {
       ) : currentView === "detail" && selectedResident ? (
         <div className="detail-wrapper">
           <div className="detail-top">
-            <img
-              src={selectedResident.image}
+            <ProfileImage
+              pin={selectedResident.pin}
+              initialSrc={selectedResident.image}
               alt={selectedResident.name}
               className="detail-image"
-              onError={(e) => {
-                e.target.src = "/images/profile.png";
-              }}
             />
             <div className="detail-info">
               <h2>{selectedResident.name}</h2>
@@ -1134,12 +1159,10 @@ function App() {
                     className="coworker-card"
                     onClick={() => handleResidentClick(cw)}
                   >
-                    <img
-                      src={cw.image}
+                    <ProfileImage
+                      pin={cw.pin}
+                      initialSrc={cw.image}
                       alt={cw.name}
-                      onError={(e) => {
-                        e.target.src = "/images/profile.png";
-                      }}
                     />
                     <span className="coworker-name">{cw.name}</span>
                   </div>
@@ -1791,10 +1814,10 @@ function App() {
           >
             <h3>소원 정보 수정</h3>
             <div className="admin-edit-body">
-              <img
-                src={adminSelectedResident.image}
+              <ProfileImage
+                pin={adminSelectedResident.pin}
+                initialSrc={adminSelectedResident.image}
                 alt={adminSelectedResident.name}
-                onError={(e) => (e.target.src = "/images/profile.png")}
               />
               <div className="admin-edit-form">
                 {adminSelectedResident.id === 1 ? (

@@ -10,6 +10,14 @@
   color: #ffffff;
   font-family: "국방과학연구소체", sans-serif;
   touch-action: manipulation; /* 더블 탭 줌 확대 방지 및 패닝(스크롤)만 허용 */
+  user-select: none; /* 텍스트 드래그 및 블록 지정 방지 */
+  -webkit-touch-callout: none; /* 모바일/터치 길게 누르기 팝업 방지 */
+}
+
+/* 입력창에서는 텍스트 선택이 가능하도록 예외 처리 */
+input,
+textarea {
+  user-select: auto;
 }
 
 /* 가상 요소를 이용한 배경 이미지 블러 및 어둡기 처리 */
@@ -37,12 +45,6 @@
   transition:
     opacity 1s ease-in-out,
     visibility 1s ease-in-out; /* 부드럽게 사라지는 효과 */
-}
-
-/* 1번 슬라이드에서 우측 상단을 숨기기 위한 클래스 */
-.top-right-container.hidden {
-  opacity: 0;
-  visibility: hidden;
 }
 
 .top-right-logo {
@@ -215,6 +217,9 @@
   border: 4px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
   margin-bottom: 1rem; /* 사진과 이름 사이 여백 축소 */
+  /* 저해상도 이미지가 억지로 늘어날 때 뿌옇게 번지는 것을 막고 최대한 선명하게 렌더링 */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
 }
 
 .resident-name {
@@ -638,6 +643,8 @@
   object-position: center 15%;
   border: 6px solid rgba(255, 255, 255, 0.9);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
 }
 .detail-info {
   display: flex;
@@ -735,6 +742,8 @@
   border: 3px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
   margin-bottom: 1rem;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
 }
 .coworker-name {
   font-size: 1.4rem; /* 부서원 이름 크기 축소 */
@@ -1120,6 +1129,8 @@
   border-radius: 12px;
   object-fit: cover;
   border: 1px solid #ddd;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
 }
 
 .admin-edit-form {
