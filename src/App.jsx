@@ -118,7 +118,6 @@ function App() {
   const [isLangKo, setIsLangKo] = useState(true); // 한/영 상태
   const [isShift, setIsShift] = useState(false); // Shift 상태 추가
   const [selectedResident, setSelectedResident] = useState(null); // 클릭한 회원 객체
-  const [pendingResident, setPendingResident] = useState(null); // 고유번호 확인 대기 중인 회원
   const [showPinModal, setShowPinModal] = useState(false); // 고유번호 팝업창 표시 여부
   const [pinInput, setPinInput] = useState(""); // 입력된 고유번호
   const [showAdminModal, setShowAdminModal] = useState(false); // 관리자 로그인 팝업창
@@ -158,6 +157,17 @@ function App() {
   const [yearsList, setYearsList] = useState([]); // 조회할 연도 리스트 상태
   const [isIdleModalOpen, setIsIdleModalOpen] = useState(false); // 무반응(유휴) 알림 팝업창 표시 여부
   const [idleCountdown, setIdleCountdown] = useState(5); // 무반응 알림 팝업 카운트다운 숫자
+  const [dialogConfig, setDialogConfig] = useState(null); // 커스텀 알림/확인창 상태
+
+  // 커스텀 알림창 함수 (전체화면 해제 방지)
+  const showAlert = (message, onConfirm = null) => {
+    setDialogConfig({ type: "alert", message, onConfirm });
+  };
+
+  // 커스텀 확인창 함수 (전체화면 해제 방지)
+  const showConfirm = (message, onConfirm, onCancel = null) => {
+    setDialogConfig({ type: "confirm", message, onConfirm, onCancel });
+  };
 
   // 터치 및 휠을 이용한 화면 확대/축소(줌) 방지
   useEffect(() => {
@@ -185,9 +195,8 @@ function App() {
     };
   }, []);
 
-  // 컴포넌트 마운트 시 전체 연도의 데이터를 비동기로 미리 호출하여 캐싱 (검색 및 슬라이더용)
-  useEffect(() => {
-    // 1. 먼저 연도 범위를 조회합니다.
+  // 홈 화면 슬라이더 데이터를 서버에서 최신으로 다시 불러오는 함수
+  const fetchSliderData = () => {
     fetch("/members/admission-years/range", {
       method: "GET",
     })
@@ -207,7 +216,6 @@ function App() {
         );
         setYearsList(fetchedYearsList);
 
-        // 2. 구해진 연도 범위에 맞춰 개별 연도 데이터를 호출합니다.
         fetchedYearsList.forEach((year) => {
           fetch(`/members/admission-years/${year}`, {
             method: "GET",
@@ -220,9 +228,9 @@ function App() {
                   id: r.memberId,
                   name: r.name,
                   image: r.profileImagePath || "/images/profile.png",
-                  pin: r.memberCode ? String(r.memberCode) : "", // 실제 회원의 고유번호를 문자로 안전하게 매핑
-                  date: `${year}-01-01`, // API에 없으면 임시 설정
-                  department: "미배정", // API에 없으면 임시 설정
+                  pin: r.memberCode ? String(r.memberCode) : "",
+                  date: `${year}-01-01`,
+                  department: "미배정",
                   deptHistory: [],
                   coworkers: [],
                 }));
@@ -240,6 +248,11 @@ function App() {
       .catch((err) => {
         console.error("연도 범위 호출 에러:", err);
       });
+  };
+
+  // 컴포넌트 마운트 시 최초 데이터 로드
+  useEffect(() => {
+    fetchSliderData();
   }, []);
 
   // 데이터가 존재하는 연도만 필터링 (초기 로딩 시 화면 터짐 방지를 위해 임시로 올해 연도를 노출)
@@ -419,7 +432,6 @@ function App() {
             setIsMenuOpen(false);
             setIsKeyboardOpen(false);
             setShowPinModal(false);
-            setPendingResident(null);
             setShowAdminModal(false);
             setAdminSelectedResident(null);
             setAdminCurrentPassword("");
@@ -569,7 +581,7 @@ function App() {
   // 프로필 카드 클릭 시 팝업 띄우기
   const handleResidentClick = (resident) => {
     console.log("선택된 소원 데이터 (F12에서 확인):", resident); // 백엔드에서 전달받은 실제 고유번호(pin) 확인용
-    setPendingResident(resident);
+    setSelectedResident(resident);
     setPinInput("");
     setShowPinModal(true);
   };
@@ -579,19 +591,18 @@ function App() {
     if (key === "취소") {
       setShowPinModal(false);
       setPinInput("");
-      setPendingResident(null);
     } else if (key === "지우기") {
       setPinInput((prev) => prev.slice(0, -1));
     } else if (key === "확인") {
-      if (pinInput === pendingResident.pin) {
+      if (pinInput === selectedResident.pin) {
         // 번호 일치 시 API 호출하여 상세 정보 가져오기
-        fetch(`/member/${pendingResident.id}`)
+        fetch(`/member/${selectedResident.id}`)
           .then((res) => res.json())
           .then((json) => {
             if (json.success && json.data) {
               const detailData = json.data;
-              setSelectedResident({
-                ...pendingResident,
+              setSelectedResident((prev) => ({
+                ...prev,
                 date: detailData.joinDate,
                 department: detailData.joinDepartmentName,
                 coworkers: detailData.colleaguesAtJoin
@@ -602,24 +613,23 @@ function App() {
                       pin: cw.memberCode ? String(cw.memberCode) : "", // 부서원도 고유번호를 가지도록 추가
                     }))
                   : [],
-              });
+              }));
               setShowPinModal(false);
               setPinInput("");
-              setPendingResident(null);
               setCurrentView("detail");
               setIsKeyboardOpen(false); // 가상 키보드 닫기
             } else {
-              alert("소원 상세 정보를 불러오지 못했습니다.");
+              showAlert("소원 상세 정보를 불러오지 못했습니다.");
               setPinInput("");
             }
           })
           .catch((err) => {
             console.error("상세 정보 호출 에러:", err);
-            alert("상세 정보를 불러오는 중 오류가 발생했습니다.");
+            showAlert("상세 정보를 불러오는 중 오류가 발생했습니다.");
             setPinInput("");
           });
       } else {
-        alert("고유번호가 일치하지 않습니다.");
+        showAlert("고유번호가 일치하지 않습니다.");
         setPinInput("");
       }
     } else {
@@ -632,10 +642,10 @@ function App() {
   // 선택된 회원 삭제 핸들러
   const handleDeleteSelected = async () => {
     if (adminSelectedForDelete.length === 0) {
-      alert("삭제할 소원을 선택해주세요.");
+      showAlert("삭제할 소원을 선택해주세요.");
       return;
     }
-    if (window.confirm("정말 삭제하시겠습니까?")) {
+    showConfirm("정말 삭제하시겠습니까?", async () => {
       try {
         const deletePromises = adminSelectedForDelete.map((id) =>
           fetch(`/admin/members/${id}`, {
@@ -647,27 +657,30 @@ function App() {
         const hasError = results.some((result) => !result.success);
 
         if (hasError) {
-          alert("일부 소원 삭제에 실패했습니다.");
+          showAlert("일부 소원 삭제에 실패했습니다.");
         } else {
-          alert(`${adminSelectedForDelete.length}명의 소원이 삭제되었습니다.`);
+          showAlert(
+            `${adminSelectedForDelete.length}명의 소원이 삭제되었습니다.`,
+          );
         }
 
         fetchAdminMembers(adminCurrentPage, adminSearchKeyword); // 삭제 후 목록 최신화
         setAdminSelectedForDelete([]); // 선택 초기화
+        fetchSliderData(); // 슬라이더 데이터 최신화
       } catch (err) {
         console.error("소원 삭제 API 에러:", err);
-        alert("소원 삭제 중 오류가 발생했습니다.");
+        showAlert("소원 삭제 중 오류가 발생했습니다.");
       }
-    }
+    });
   };
 
   // 선택된 부서 삭제 핸들러
   const handleDeleteDeptSelected = async () => {
     if (deptSelectedForDelete.length === 0) {
-      alert("삭제할 부서를 선택해주세요.");
+      showAlert("삭제할 부서를 선택해주세요.");
       return;
     }
-    if (window.confirm("정말 삭제하시겠습니까?")) {
+    showConfirm("정말 삭제하시겠습니까?", async () => {
       try {
         const deletePromises = deptSelectedForDelete.map((id) =>
           fetch(`/departments/${id}`, {
@@ -679,18 +692,21 @@ function App() {
         const hasError = results.some((result) => !result.success);
 
         if (hasError) {
-          alert("일부 부서 삭제에 실패했습니다.");
+          showAlert("일부 부서 삭제에 실패했습니다.");
         } else {
-          alert(`${deptSelectedForDelete.length}개의 부서가 삭제되었습니다.`);
+          showAlert(
+            `${deptSelectedForDelete.length}개의 부서가 삭제되었습니다.`,
+          );
         }
 
         fetchDepartments(); // 삭제 후 목록 최신화
         setDeptSelectedForDelete([]); // 선택 초기화
+        fetchSliderData(); // 슬라이더 데이터 최신화
       } catch (err) {
         console.error("부서 삭제 API 에러:", err);
-        alert("부서 삭제 중 오류가 발생했습니다.");
+        showAlert("부서 삭제 중 오류가 발생했습니다.");
       }
-    }
+    });
   };
 
   // 관리자 비밀번호 키패드 입력 핸들러
@@ -722,13 +738,13 @@ function App() {
             setCurrentView("admin");
             setIsKeyboardOpen(false); // 가상 키보드 닫기
           } else {
-            alert("비밀번호가 일치하지 않습니다.");
+            showAlert("비밀번호가 일치하지 않습니다.");
             setAdminPinInput("");
           }
         })
         .catch((err) => {
           console.error("관리자 로그인 에러:", err);
-          alert("관리자 로그인 중 오류가 발생했습니다.");
+          showAlert("관리자 로그인 중 오류가 발생했습니다.");
           setAdminPinInput("");
         });
     } else {
@@ -747,75 +763,50 @@ function App() {
           setAllDepartments(json.data);
         } else {
           setAllDepartments([]);
-          alert("부서 목록을 불러오는데 실패했습니다.");
+          showAlert("부서 목록을 불러오는데 실패했습니다.");
         }
       })
       .catch((err) => {
         console.error("부서 조회 API 에러:", err);
         setAllDepartments([]);
-        alert("부서 목록을 불러오는 중 오류가 발생했습니다.");
+        showAlert("부서 목록을 불러오는 중 오류가 발생했습니다.");
       });
   };
 
   // 관리자 회원 조회 API 호출
   const fetchAdminMembers = (page, keyword) => {
+    const pageParam = page - 1; // Spring Boot(Pageable)는 기본적으로 0-based page 사용
+    let url = `/admin/members?page=${pageParam}&size=10`;
     if (keyword) {
-      // 검색어가 있을 경우 이름 검색 API 사용
-      fetch(`/members/search?name=${encodeURIComponent(keyword.trim())}`)
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success && json.data) {
-            const mappedData = json.data.map((r) => ({
-              id: r.memberId,
-              pin: r.memberCode || "",
-              name: r.name,
-              image: r.profileImagePath || "/images/profile.png",
-              department: r.joinDepartmentName || "미배정",
-              deptHistory: [], // 필요 시 이력 추가
-            }));
-            setAdminMembersList(mappedData);
-            setAdminTotalPagesState(1); // 검색 결과는 한 페이지에 모두 표시
-          } else {
-            setAdminMembersList([]);
-            setAdminTotalPagesState(1);
-          }
-        })
-        .catch((err) => {
-          console.error("관리자 소원 검색 에러:", err);
-          setAdminMembersList([]);
-          setAdminTotalPagesState(1);
-        });
-    } else {
-      // 검색어가 없을 경우 전체 목록 페이징 API 사용
-      const pageParam = page - 1; // Spring Boot(Pageable)는 기본적으로 0-based page 사용
-      const url = `/admin/members?page=${pageParam}&size=10`;
-      fetch(url)
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success && json.data) {
-            const mappedData = json.data.content.map((r) => ({
-              id: r.memberId,
-              pin: r.memberCode || "",
-              name: r.name,
-              image: r.profileImagePath || "/images/profile.png",
-              department: r.joinDepartmentName || "미배정",
-              deptHistory: [], // 필요 시 이력 추가
-            }));
-            setAdminMembersList(mappedData);
-            setAdminTotalPagesState(
-              json.data.totalPages === 0 ? 1 : json.data.totalPages,
-            );
-          } else {
-            setAdminMembersList([]);
-            setAdminTotalPagesState(1);
-          }
-        })
-        .catch((err) => {
-          console.error("관리자 소원 조회 에러:", err);
-          setAdminMembersList([]);
-          setAdminTotalPagesState(1);
-        });
+      url += `&keyword=${encodeURIComponent(keyword)}`; // 백엔드 검색 구현에 맞춰 파라미터 추가
     }
+
+    fetch(url)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && json.data) {
+          const mappedData = json.data.content.map((r) => ({
+            id: r.memberId,
+            pin: r.memberCode || "",
+            name: r.name,
+            image: r.profileImagePath || "/images/profile.png",
+            department: r.joinDepartmentName || "미배정",
+            deptHistory: [], // 필요 시 이력 추가
+          }));
+          setAdminMembersList(mappedData);
+          setAdminTotalPagesState(
+            json.data.totalPages === 0 ? 1 : json.data.totalPages,
+          );
+        } else {
+          setAdminMembersList([]);
+          setAdminTotalPagesState(1);
+        }
+      })
+      .catch((err) => {
+        console.error("관리자 소원 조회 에러:", err);
+        setAdminMembersList([]);
+        setAdminTotalPagesState(1);
+      });
   };
 
   // 부서 목록 클라이언트 측 필터링 및 페이지네이션
@@ -869,12 +860,12 @@ function App() {
           setAdminCurrentPassword(""); // 모달 열 때 비밀번호 입력 초기화
           setAdminNewPassword("");
         } else {
-          alert("소원 상세 정보를 불러오지 못했습니다.");
+          showAlert("소원 상세 정보를 불러오지 못했습니다.");
         }
       })
       .catch((err) => {
         console.error("관리자 소원 상세 조회 에러:", err);
-        alert("상세 정보를 불러오는 중 오류가 발생했습니다.");
+        showAlert("상세 정보를 불러오는 중 오류가 발생했습니다.");
       });
   };
 
@@ -892,15 +883,20 @@ function App() {
         .then((res) => res.json())
         .then((json) => {
           if (json.success) {
-            alert("엑셀 파일을 통해 소원이 성공적으로 등록되었습니다.");
-            setCurrentView("admin");
+            showAlert(
+              "엑셀 파일을 통해 소원이 성공적으로 등록되었습니다.",
+              () => {
+                fetchSliderData(); // 슬라이더 데이터 최신화
+                setCurrentView("admin");
+              },
+            );
           } else {
-            alert(json.message || "엑셀 업로드에 실패했습니다.");
+            showAlert(json.message || "엑셀 업로드에 실패했습니다.");
           }
         })
         .catch((err) => {
           console.error("소원 엑셀 업로드 에러:", err);
-          alert("소원 엑셀 업로드 중 오류가 발생했습니다.");
+          showAlert("소원 엑셀 업로드 중 오류가 발생했습니다.");
         });
       return;
     }
@@ -912,7 +908,7 @@ function App() {
       !memberAddJoinDept ||
       !memberAddJoinDate
     ) {
-      alert("고유번호, 이름, 입소일자, 입소부서는 필수 입력값입니다.");
+      showAlert("고유번호, 이름, 입소일자, 입소부서는 필수 입력값입니다.");
       return;
     }
 
@@ -951,15 +947,20 @@ function App() {
       .then((res) => res.json())
       .then((json) => {
         if (json.success) {
-          alert(json.message || "소원 등록이 성공적으로 완료되었습니다.");
-          setCurrentView("admin");
+          showAlert(
+            json.message || "소원 등록이 성공적으로 완료되었습니다.",
+            () => {
+              fetchSliderData(); // 슬라이더 데이터 최신화
+              setCurrentView("admin");
+            },
+          );
         } else {
-          alert(json.message || "소원 등록에 실패했습니다.");
+          showAlert(json.message || "소원 등록에 실패했습니다.");
         }
       })
       .catch((err) => {
         console.error("소원 등록 에러:", err);
-        alert("소원 등록 중 오류가 발생했습니다.");
+        showAlert("소원 등록 중 오류가 발생했습니다.");
       });
   };
 
@@ -976,30 +977,32 @@ function App() {
 
   // 프로그램 종료 핸들러
   const handleShutdown = () => {
-    if (window.confirm("정말 프로그램을 종료하시겠습니까?")) {
+    showConfirm("정말 프로그램을 종료하시겠습니까?", () => {
       fetch("/system/shutdown", {
         method: "POST",
       })
         .then((res) => res.json())
         .then((json) => {
           if (json.status === "200" || json.success) {
-            alert("프로그램을 종료합니다.");
-            window.close(); // 브라우저 창 닫기 시도
-            document.body.innerHTML =
-              "<div style='display:flex; justify-content:center; align-items:center; height:100vh; background:#000; color:#fff; font-size:2rem;'>프로그램이 종료되었습니다. 창을 닫아주세요.</div>";
+            showAlert("프로그램을 종료합니다.", () => {
+              window.close(); // 브라우저 창 닫기 시도
+              document.body.innerHTML =
+                "<div style='display:flex; justify-content:center; align-items:center; height:100vh; background:#000; color:#fff; font-size:2rem;'>프로그램이 종료되었습니다. 창을 닫아주세요.</div>";
+            });
           } else {
-            alert("종료 요청에 실패했습니다.");
+            showAlert("종료 요청에 실패했습니다.");
           }
         })
         .catch((err) => {
           console.error("종료 API 에러:", err);
           // 서버가 즉시 종료되어 응답 수신 전 네트워크 에러가 날 수 있으므로 동일하게 종료 처리
-          alert("프로그램을 종료합니다.");
-          window.close();
-          document.body.innerHTML =
-            "<div style='display:flex; justify-content:center; align-items:center; height:100vh; background:#000; color:#fff; font-size:2rem;'>프로그램이 종료되었습니다. 창을 닫아주세요.</div>";
+          showAlert("프로그램을 종료합니다.", () => {
+            window.close();
+            document.body.innerHTML =
+              "<div style='display:flex; justify-content:center; align-items:center; height:100vh; background:#000; color:#fff; font-size:2rem;'>프로그램이 종료되었습니다. 창을 닫아주세요.</div>";
+          });
         });
-    }
+    });
   };
 
   return (
@@ -1335,7 +1338,7 @@ function App() {
             <div className="admin-list-search">
               <input
                 type="text"
-                placeholder="소원 이름으로 검색..."
+                placeholder="소원 이름 또는 고유번호 검색..."
                 value={adminSearchValue}
                 onChange={(e) => {
                   setAdminSearchValue(e.target.value);
@@ -2077,13 +2080,13 @@ function App() {
                   if (adminSelectedResident.id === 1) {
                     // 관리자 비밀번호 변경 로직
                     if (!adminCurrentPassword) {
-                      alert("현재 비밀번호를 입력해주세요.");
+                      showAlert("현재 비밀번호를 입력해주세요.");
                       return;
                     }
                     // 영문 + 숫자 8자리 이상 체크
                     const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d).{8,}$/;
                     if (!passwordRegex.test(adminNewPassword)) {
-                      alert(
+                      showAlert(
                         "새 비밀번호는 영문과 숫자를 포함하여 8자리 이상이어야 합니다.",
                       );
                       return;
@@ -2100,21 +2103,23 @@ function App() {
                       .then((res) => res.json())
                       .then((json) => {
                         if (json.success) {
-                          alert("관리자 비밀번호가 성공적으로 변경되었습니다.");
+                          showAlert(
+                            "관리자 비밀번호가 성공적으로 변경되었습니다.",
+                          );
                           setAdminSelectedResident(null);
                           setAdminCurrentPassword("");
                           setAdminNewPassword("");
                           setIsKeyboardOpen(false);
                           setFocusedInput(null);
                         } else {
-                          alert(
+                          showAlert(
                             json.message || "비밀번호 변경에 실패했습니다.",
                           );
                         }
                       })
                       .catch((err) => {
                         console.error("비밀번호 변경 에러:", err);
-                        alert("비밀번호 변경 중 오류가 발생했습니다.");
+                        showAlert("비밀번호 변경 중 오류가 발생했습니다.");
                       });
                   } else {
                     // 일반 회원 정보 수정 로직 (PUT API 호출)
@@ -2140,7 +2145,7 @@ function App() {
                       .then((res) => res.json())
                       .then((json) => {
                         if (json.success) {
-                          alert("소원 정보가 성공적으로 수정되었습니다.");
+                          showAlert("소원 정보가 성공적으로 수정되었습니다.");
                           setAdminSelectedResident(null);
                           setIsKeyboardOpen(false);
                           setFocusedInput(null);
@@ -2148,13 +2153,16 @@ function App() {
                             adminCurrentPage,
                             adminSearchKeyword,
                           ); // 수정 후 목록 새로고침
+                          fetchSliderData(); // 슬라이더 데이터 최신화
                         } else {
-                          alert(json.message || "정보 수정에 실패했습니다.");
+                          showAlert(
+                            json.message || "정보 수정에 실패했습니다.",
+                          );
                         }
                       })
                       .catch((err) => {
                         console.error("수정 API 에러:", err);
-                        alert("정보 수정 중 오류가 발생했습니다.");
+                        showAlert("정보 수정 중 오류가 발생했습니다.");
                       });
                   }
                 }}
@@ -2295,7 +2303,7 @@ function App() {
                       .then((res) => res.json())
                       .then((json) => {
                         if (json.success) {
-                          alert(
+                          showAlert(
                             "엑셀 파일을 통해 부서가 성공적으로 추가되었습니다.",
                           );
                           setIsDeptAddModalOpen(false);
@@ -2307,12 +2315,14 @@ function App() {
                           setFocusedInput(null);
                           fetchDepartments(); // 성공 후 부서 목록 갱신
                         } else {
-                          alert(json.message || "엑셀 업로드에 실패했습니다.");
+                          showAlert(
+                            json.message || "엑셀 업로드에 실패했습니다.",
+                          );
                         }
                       })
                       .catch((err) => {
                         console.error("엑셀 업로드 API 에러:", err);
-                        alert("엑셀 업로드 중 오류가 발생했습니다.");
+                        showAlert("엑셀 업로드 중 오류가 발생했습니다.");
                       });
                     return;
                   }
@@ -2323,7 +2333,7 @@ function App() {
                     !newDeptName.trim() ||
                     !newDeptStartDate
                   ) {
-                    alert(
+                    showAlert(
                       "부서코드, 부서명, 시작(변경)일자를 모두 입력해주세요.",
                     );
                     return;
@@ -2341,7 +2351,7 @@ function App() {
                     .then((res) => res.json())
                     .then((json) => {
                       if (json.success) {
-                        alert("부서가 성공적으로 추가되었습니다.");
+                        showAlert("부서가 성공적으로 추가되었습니다.");
                         setIsDeptAddModalOpen(false);
                         setNewDeptCode("");
                         setNewDeptName("");
@@ -2349,13 +2359,14 @@ function App() {
                         setIsKeyboardOpen(false);
                         setFocusedInput(null);
                         fetchDepartments(); // 성공 후 부서 목록 갱신
+                        fetchSliderData(); // 슬라이더 데이터 최신화
                       } else {
-                        alert(json.message || "부서 추가에 실패했습니다.");
+                        showAlert(json.message || "부서 추가에 실패했습니다.");
                       }
                     })
                     .catch((err) => {
                       console.error("부서 추가 API 에러:", err);
-                      alert("부서 추가 중 오류가 발생했습니다.");
+                      showAlert("부서 추가 중 오류가 발생했습니다.");
                     });
                 }}
               >
@@ -2468,11 +2479,11 @@ function App() {
       )}
 
       {/* 고유번호 입력 팝업창 (모달) */}
-      {showPinModal && pendingResident && (
+      {showPinModal && selectedResident && (
         <div className="pin-modal-overlay">
           <div className="pin-modal">
             <h2>고유번호 입력</h2>
-            <p>{pendingResident.name} 님의 고유번호를 입력해주세요.</p>
+            <p>{selectedResident.name} 님의 고유번호를 입력해주세요.</p>
             <div className="pin-display">
               {pinInput ? "●".repeat(pinInput.length) : "번호를 입력하세요"}
             </div>
@@ -2639,6 +2650,67 @@ function App() {
           <button className="menu-toggle-btn" onClick={toggleMenu}>
             {isMenuOpen ? "✕" : "☰"}
           </button>
+        </div>
+      )}
+
+      {/* 커스텀 알림/확인창 (Alert/Confirm 대체) */}
+      {dialogConfig && (
+        <div className="pin-modal-overlay" style={{ zIndex: 9999 }}>
+          <div
+            className={`pin-modal ${isKeyboardOpen ? "keyboard-up" : ""}`}
+            style={{
+              minWidth: "350px",
+              maxWidth: "80%",
+              textAlign: "center",
+              padding: "3rem",
+            }}
+          >
+            <h2
+              style={{
+                marginBottom: "1.5rem",
+                fontSize: "2.2rem",
+                color: "#000",
+              }}
+            >
+              알림
+            </h2>
+            <p
+              style={{
+                fontSize: "1.5rem",
+                color: "#333",
+                whiteSpace: "pre-line",
+                wordBreak: "keep-all",
+                lineHeight: 1.5,
+                margin: "0 0 2rem 0",
+              }}
+            >
+              {dialogConfig.message}
+            </p>
+            <div style={{ display: "flex", gap: "1rem", width: "100%" }}>
+              {dialogConfig.type === "confirm" && (
+                <button
+                  className="pin-confirm-btn"
+                  style={{ flex: 1, backgroundColor: "#aaa" }}
+                  onClick={() => {
+                    if (dialogConfig.onCancel) dialogConfig.onCancel();
+                    setDialogConfig(null);
+                  }}
+                >
+                  취소
+                </button>
+              )}
+              <button
+                className="pin-confirm-btn"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  if (dialogConfig.onConfirm) dialogConfig.onConfirm();
+                  setDialogConfig(null);
+                }}
+              >
+                확인
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
