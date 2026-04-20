@@ -43,8 +43,8 @@ textarea {
   align-items: center;
   gap: 0.6rem; /* 로고와 텍스트 사이의 간격을 좁힘 (1.2rem -> 0.6rem) */
   transition:
-    opacity 1s ease-in-out,
-    visibility 1s ease-in-out; /* 부드럽게 사라지는 효과 */
+    opacity 2s ease-in-out,
+    visibility 2s ease-in-out; /* 2초 동안 부드럽게 나타나고 사라지는 효과 */
 }
 
 .top-right-logo {

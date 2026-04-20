@@ -1008,9 +1008,15 @@ function App() {
 
   return (
     <div className="app-container" onContextMenu={(e) => e.preventDefault()}>
-      {/* 우측 상단 고정 로고 (오직 연도별 임용자 슬라이드에서만 표시) */}
-      {currentView === "slider" && currentPageType === "residents" && (
-        <div className="top-right-container">
+      {/* 우측 상단 고정 로고 (연도별 임용자 슬라이드에서만 부드럽게 표시) */}
+      {currentView === "slider" && (
+        <div
+          className="top-right-container"
+          style={{
+            opacity: currentPageType === "residents" ? 1 : 0,
+            visibility: currentPageType === "residents" ? "visible" : "hidden",
+          }}
+        >
           <img
             src="/images/국방과학연구소 로고_국문.png"
             alt="국방과학연구소 로고"
