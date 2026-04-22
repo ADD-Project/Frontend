@@ -48,6 +48,9 @@ const mediaPaths = Object.keys(
 const PRE_RESIDENT_IMAGES = [];
 const POST_RESIDENT_VIDEOS = [];
 
+// 앱이 새로고침될 때마다 바뀌는 시간값을 이용해 캐시 방지 파라미터(Cache Buster)를 생성합니다.
+const cacheBuster = new Date().getTime();
+
 // 파일명에 포함된 숫자를 기준으로 오름차순 정렬 (예: 1.jpg -> 2.png -> 10.mp4)
 mediaPaths
   .sort((a, b) => {
@@ -57,7 +60,8 @@ mediaPaths
   })
   .forEach((path) => {
     const fileName = path.split("/").pop();
-    const url = `/images/pages/${fileName}`;
+    // URL 뒤에 타임스탬프 파라미터를 붙여 브라우저 캐시를 무시하고 최신 파일을 불러오도록 합니다.
+    const url = `/images/pages/${fileName}?v=${cacheBuster}`;
     if (/\.(mp4|webm|ogg|mov)$/i.test(fileName)) {
       POST_RESIDENT_VIDEOS.push(url);
     } else {
@@ -85,7 +89,7 @@ const ProfileImage = ({ pin, initialSrc, alt, className }) => {
     attempt === -1
       ? initialSrc
       : pin && attempt < extensions.length
-        ? `/images/진해_인사사진/${pin}${extensions[attempt]}`
+        ? `/images/진해_인사사진/${pin}${extensions[attempt]}?v=${cacheBuster}`
         : "/images/profile.png";
 
   const handleError = (e) => {
