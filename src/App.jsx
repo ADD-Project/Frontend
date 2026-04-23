@@ -37,37 +37,8 @@ const keyboardLayouts = {
   ],
 };
 
-// --- 파일 자동 인식 로직 ---
-// public/images/pages 폴더 내의 미디어 파일을 자동으로 스캔합니다.
-const mediaPaths = Object.keys(
-  import.meta.glob(
-    "/public/images/pages/*.{png,jpg,jpeg,gif,webp,bmp,mp4,webm,ogg,mov}",
-  ),
-);
-
-const PRE_RESIDENT_IMAGES = [];
-const POST_RESIDENT_VIDEOS = [];
-
 // 앱이 새로고침될 때마다 바뀌는 시간값을 이용해 캐시 방지 파라미터(Cache Buster)를 생성합니다.
 const cacheBuster = new Date().getTime();
-
-// 파일명에 포함된 숫자를 기준으로 오름차순 정렬 (예: 1.jpg -> 2.png -> 10.mp4)
-mediaPaths
-  .sort((a, b) => {
-    const numA = parseInt(a.match(/\d+/)?.[0] || 0);
-    const numB = parseInt(b.match(/\d+/)?.[0] || 0);
-    return numA - numB;
-  })
-  .forEach((path) => {
-    const fileName = path.split("/").pop();
-    // URL 뒤에 타임스탬프 파라미터를 붙여 브라우저 캐시를 무시하고 최신 파일을 불러오도록 합니다.
-    const url = `/images/pages/${fileName}?v=${cacheBuster}`;
-    if (/\.(mp4|webm|ogg|mov)$/i.test(fileName)) {
-      POST_RESIDENT_VIDEOS.push(url);
-    } else {
-      PRE_RESIDENT_IMAGES.push(url);
-    }
-  });
 
 // 3. 스마트 프로필 이미지 로드용 컴포넌트
 // - 고유번호(pin)를 바탕으로 여러 확장자를 순서대로 시도하며 이미지를 렌더링
@@ -162,6 +133,8 @@ function App() {
   const [isIdleModalOpen, setIsIdleModalOpen] = useState(false); // 무반응(유휴) 알림 팝업창 표시 여부
   const [idleCountdown, setIdleCountdown] = useState(5); // 무반응 알림 팝업 카운트다운 숫자
   const [dialogConfig, setDialogConfig] = useState(null); // 커스텀 알림/확인창 상태
+  const [preResidentImages, setPreResidentImages] = useState([]); // 시작 전 이미지 목록
+  const [postResidentVideos, setPostResidentVideos] = useState([]); // 끝난 후 비디오 목록
 
   // 커스텀 알림창 함수 (전체화면 해제 방지)
   const showAlert = (message, onConfirm = null) => {
@@ -254,9 +227,34 @@ function App() {
       });
   };
 
+  // 미디어 파일(이미지/동영상) 목록을 서버에서 불러오는 함수
+  const fetchMediaFiles = () => {
+    fetch("/api/media/pages")
+      .then((res) => {
+        if (!res.ok) throw new Error("미디어 API 응답 에러");
+        return res.json();
+      })
+      .then((files) => {
+        const preImages = [];
+        const postVideos = [];
+        files.forEach((fileName) => {
+          const url = `/images/pages/${fileName}?v=${cacheBuster}`;
+          if (/\.(mp4|webm|ogg|mov)$/i.test(fileName)) {
+            postVideos.push(url);
+          } else {
+            preImages.push(url);
+          }
+        });
+        setPreResidentImages(preImages);
+        setPostResidentVideos(postVideos);
+      })
+      .catch((err) => console.error("미디어 파일 로드 에러:", err));
+  };
+
   // 컴포넌트 마운트 시 최초 데이터 로드
   useEffect(() => {
     fetchSliderData();
+    fetchMediaFiles();
   }, []);
 
   // 데이터가 존재하는 연도만 필터링 (초기 로딩 시 화면 터짐 방지를 위해 임시로 올해 연도를 노출)
@@ -269,7 +267,7 @@ function App() {
   const sliderPages = [];
 
   // 1. 설정된 이미지들을 순서대로 추가
-  PRE_RESIDENT_IMAGES.forEach((src) => {
+  preResidentImages.forEach((src) => {
     sliderPages.push({ type: "image", src: src });
   });
 
@@ -296,7 +294,7 @@ function App() {
   }
 
   // 3. 폴더에서 스캔된 모든 동영상을 마지막에 순서대로 추가
-  POST_RESIDENT_VIDEOS.forEach((src) => {
+  postResidentVideos.forEach((src) => {
     sliderPages.push({ type: "video", src: src });
   });
 
