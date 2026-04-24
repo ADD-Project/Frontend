@@ -1472,21 +1472,56 @@ function App() {
               </table>
             </div>
             <div className="admin-pagination">
-              {Array.from(
-                { length: adminTotalPagesState },
-                (_, i) => i + 1,
-              ).map((page) => (
-                <button
-                  key={page}
-                  className={`admin-page-btn ${page === adminCurrentPage ? "active" : ""}`}
-                  onClick={() => {
-                    setAdminCurrentPage(page);
-                    fetchAdminMembers(page, adminSearchKeyword); // 페이지 이동 시 API 재호출
-                  }}
-                >
-                  {page}
-                </button>
-              ))}
+              {(() => {
+                const pageGroupSize = 10;
+                const currentGroup = Math.ceil(adminCurrentPage / pageGroupSize);
+                const startPage = (currentGroup - 1) * pageGroupSize + 1;
+                const endPage = Math.min(startPage + pageGroupSize - 1, adminTotalPagesState);
+
+                const pages = [];
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(i);
+                }
+
+                return (
+                  <>
+                    <button
+                      className="admin-page-btn"
+                      disabled={currentGroup === 1}
+                      onClick={() => {
+                        const newPage = startPage - 1;
+                        setAdminCurrentPage(newPage);
+                        fetchAdminMembers(newPage, adminSearchKeyword);
+                      }}
+                    >
+                      &lt;
+                    </button>
+                    {pages.map((page) => (
+                      <button
+                        key={page}
+                        className={`admin-page-btn ${page === adminCurrentPage ? "active" : ""}`}
+                        onClick={() => {
+                          setAdminCurrentPage(page);
+                          fetchAdminMembers(page, adminSearchKeyword);
+                        }}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      className="admin-page-btn"
+                      disabled={endPage === adminTotalPagesState}
+                      onClick={() => {
+                        const newPage = endPage + 1;
+                        setAdminCurrentPage(newPage);
+                        fetchAdminMembers(newPage, adminSearchKeyword);
+                      }}
+                    >
+                      &gt;
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1639,19 +1674,45 @@ function App() {
               </table>
             </div>
             <div className="admin-pagination">
-              {Array.from({ length: deptTotalPages }, (_, i) => i + 1).map(
-                (page) => (
-                  <button
-                    key={page}
-                    className={`admin-page-btn ${page === deptCurrentPage ? "active" : ""}`}
-                    onClick={() => {
-                      setDeptCurrentPage(page);
-                    }}
-                  >
-                    {page}
-                  </button>
-                ),
-              )}
+              {(() => {
+                const pageGroupSize = 10;
+                const currentGroup = Math.ceil(deptCurrentPage / pageGroupSize);
+                const startPage = (currentGroup - 1) * pageGroupSize + 1;
+                const endPage = Math.min(startPage + pageGroupSize - 1, deptTotalPages);
+
+                const pages = [];
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(i);
+                }
+
+                return (
+                  <>
+                    <button
+                      className="admin-page-btn"
+                      disabled={currentGroup === 1}
+                      onClick={() => setDeptCurrentPage(startPage - 1)}
+                    >
+                      &lt;
+                    </button>
+                    {pages.map((page) => (
+                      <button
+                        key={page}
+                        className={`admin-page-btn ${page === deptCurrentPage ? "active" : ""}`}
+                        onClick={() => setDeptCurrentPage(page)}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      className="admin-page-btn"
+                      disabled={endPage === deptTotalPages}
+                      onClick={() => setDeptCurrentPage(endPage + 1)}
+                    >
+                      &gt;
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

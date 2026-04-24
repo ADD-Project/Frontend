@@ -1006,14 +1006,22 @@ textarea {
 
 .admin-pagination {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 1rem;
-  margin-top: 1.5rem; /* 페이지네이션 위 여백 축소 */
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+  padding: 0 0.5rem;
+  overflow-x: auto;
+}
+
+.admin-pagination::-webkit-scrollbar {
+  display: none;
 }
 
 .admin-page-btn {
-  padding: 0.8rem 1.5rem;
-  font-size: 1.4rem;
+  padding: 0.65rem 1rem;
+  font-size: 1.3rem;
   border: 1px solid #ccc;
   border-radius: 8px;
   background-color: #fff;
@@ -1022,6 +1030,13 @@ textarea {
   color: #333;
   font-family: inherit;
   font-weight: 500;
+}
+
+.admin-page-btn:disabled {
+  background-color: #f9f9f9;
+  color: #bbb;
+  cursor: not-allowed;
+  border-color: #eee;
 }
 
 .admin-page-btn.active {
