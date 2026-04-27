@@ -86,13 +86,16 @@ function App() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [prevIndex, setPrevIndex] = useState(-1);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isPaused, setIsPaused] = useState(false); // 슬라이드 멈춤 상태
   const [currentView, setCurrentView] = useState("slider"); // "slider", "search" 또는 "detail"
   const [searchValue, setSearchValue] = useState(""); // 검색어 상태
+  const [isYearSelectOpen, setIsYearSelectOpen] = useState(false); // 연도 선택 드롭다운 상태
   const [searchResults, setSearchResults] = useState([]); // 검색 API 결과 상태
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false); // 키보드 표시 여부
   const [isLangKo, setIsLangKo] = useState(true); // 한/영 상태
   const [isShift, setIsShift] = useState(false); // Shift 상태 추가
   const [selectedResident, setSelectedResident] = useState(null); // 클릭한 회원 객체
+  const [pendingResident, setPendingResident] = useState(null); // 고유번호 인증 대기 중인 회원 객체
   const [showPinModal, setShowPinModal] = useState(false); // 고유번호 팝업창 표시 여부
   const [pinInput, setPinInput] = useState(""); // 입력된 고유번호
   const [showAdminModal, setShowAdminModal] = useState(false); // 관리자 로그인 팝업창
@@ -328,20 +331,21 @@ function App() {
 
   useEffect(() => {
     if (currentView !== "slider") return; // 검색 화면일 때는 슬라이드 타이머 중지
+    if (isPaused) return; // 멈춤 상태일 때는 타이머 중지
 
     // 현재 슬라이드가 동영상인 경우 타이머를 무시 (동영상 onEnded 이벤트에서 다음으로 이동)
     if (currentPageType === "video") return;
 
-    // 스크롤될 시간을 충분히 주기 위해 15초(15000ms) 대기
+    // 스크롤될 시간을 충분히 주기 위해 20초(20000ms) 대기
     const timer = setTimeout(() => {
       setCurrentIndex((prev) => {
         setPrevIndex(prev);
         return (prev + 1) % sliderPagesLength;
       });
-    }, 15000);
+    }, 20000);
 
     return () => clearTimeout(timer);
-  }, [currentView, currentIndex, sliderPagesLength, currentPageType]);
+  }, [currentView, currentIndex, sliderPagesLength, currentPageType, isPaused]);
 
   // 슬라이드가 왼쪽으로 완전히 빠진 후(1초 뒤) prevIndex를 초기화하여 오른쪽 대기 상태로 애니메이션 없이 즉시 이동
   useEffect(() => {
@@ -392,25 +396,34 @@ function App() {
     let idleTimer;
 
     const resetIdleTimer = () => {
-      // 홈 화면이거나 이미 모달이 떠있는 상태면 무시
-      if (currentView === "slider" || isIdleModalOpen) return;
+      // 이미 모달이 떠있는 상태면 무시
+      if (isIdleModalOpen) return;
+
       clearTimeout(idleTimer);
       idleTimer = setTimeout(
         () => {
-          setIsIdleModalOpen(true);
-          setIdleCountdown(5);
+          if (currentView === "slider") {
+            if (isPaused) {
+              setIsPaused(false); // 멈춤 해제
+              setCurrentIndex((prev) => {
+                setPrevIndex(prev);
+                return (prev + 1) % sliderPagesLength;
+              });
+            }
+          } else {
+            setIsIdleModalOpen(true);
+            setIdleCountdown(5);
+          }
         },
         3 * 60 * 1000,
       ); // 3분 (180,000ms)
     };
 
-    if (currentView !== "slider") {
-      resetIdleTimer(); // 화면 진입 시 타이머 시작
-      window.addEventListener("mousemove", resetIdleTimer);
-      window.addEventListener("keydown", resetIdleTimer);
-      window.addEventListener("touchstart", resetIdleTimer);
-      window.addEventListener("click", resetIdleTimer);
-    }
+    resetIdleTimer(); // 화면 진입 및 렌더링 시 타이머 시작
+    window.addEventListener("mousemove", resetIdleTimer);
+    window.addEventListener("keydown", resetIdleTimer);
+    window.addEventListener("touchstart", resetIdleTimer);
+    window.addEventListener("click", resetIdleTimer);
 
     return () => {
       clearTimeout(idleTimer);
@@ -419,7 +432,7 @@ function App() {
       window.removeEventListener("touchstart", resetIdleTimer);
       window.removeEventListener("click", resetIdleTimer);
     };
-  }, [currentView, isIdleModalOpen]);
+  }, [currentView, isIdleModalOpen, isPaused, sliderPagesLength]);
 
   // 팝업 표시 중 1초 단위 카운트다운 및 홈 화면 이동 처리
   useEffect(() => {
@@ -432,6 +445,8 @@ function App() {
             setIsIdleModalOpen(false);
             setCurrentView("slider");
             setIsMenuOpen(false);
+            setIsPaused(false);
+            setIsYearSelectOpen(false);
             setIsKeyboardOpen(false);
             setShowPinModal(false);
             setShowAdminModal(false);
@@ -583,7 +598,7 @@ function App() {
   // 프로필 카드 클릭 시 팝업 띄우기
   const handleResidentClick = (resident) => {
     console.log("선택된 소원 데이터 (F12에서 확인):", resident); // 백엔드에서 전달받은 실제 고유번호(pin) 확인용
-    setSelectedResident(resident);
+    setPendingResident(resident);
     setPinInput("");
     setShowPinModal(true);
   };
@@ -593,18 +608,19 @@ function App() {
     if (key === "취소") {
       setShowPinModal(false);
       setPinInput("");
+      setPendingResident(null);
     } else if (key === "지우기") {
       setPinInput((prev) => prev.slice(0, -1));
     } else if (key === "확인") {
-      if (pinInput === selectedResident.pin) {
+      if (pinInput === pendingResident.pin) {
         // 번호 일치 시 API 호출하여 상세 정보 가져오기
-        fetch(`/member/${selectedResident.id}`)
+        fetch(`/member/${pendingResident.id}`)
           .then((res) => res.json())
           .then((json) => {
             if (json.success && json.data) {
               const detailData = json.data;
-              setSelectedResident((prev) => ({
-                ...prev,
+              setSelectedResident({
+                ...pendingResident,
                 date: detailData.joinDate,
                 department: detailData.joinDepartmentName,
                 coworkers: detailData.colleaguesAtJoin
@@ -615,7 +631,7 @@ function App() {
                       pin: cw.memberCode ? String(cw.memberCode) : "", // 부서원도 고유번호를 가지도록 추가
                     }))
                   : [],
-              }));
+              });
               setShowPinModal(false);
               setPinInput("");
               setCurrentView("detail");
@@ -778,38 +794,71 @@ function App() {
 
   // 관리자 회원 조회 API 호출
   const fetchAdminMembers = (page, keyword) => {
-    const pageParam = page - 1; // Spring Boot(Pageable)는 기본적으로 0-based page 사용
-    let url = `/admin/members?page=${pageParam}&size=10`;
     if (keyword) {
-      url += `&keyword=${encodeURIComponent(keyword)}`; // 백엔드 검색 구현에 맞춰 파라미터 추가
-    }
+      // 검색어가 있을 경우 이름 검색 API 호출 (클라이언트 페이징 처리)
+      fetch(`/members/search?name=${encodeURIComponent(keyword)}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data) {
+            const mappedData = json.data.map((r) => ({
+              id: r.memberId,
+              pin: r.memberCode || "",
+              name: r.name,
+              image: r.profileImagePath || "/images/profile.png",
+              department: r.joinDepartmentName || "미배정",
+              deptHistory: [], // 필요 시 이력 추가
+            }));
 
-    fetch(url)
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success && json.data) {
-          const mappedData = json.data.content.map((r) => ({
-            id: r.memberId,
-            pin: r.memberCode || "",
-            name: r.name,
-            image: r.profileImagePath || "/images/profile.png",
-            department: r.joinDepartmentName || "미배정",
-            deptHistory: [], // 필요 시 이력 추가
-          }));
-          setAdminMembersList(mappedData);
-          setAdminTotalPagesState(
-            json.data.totalPages === 0 ? 1 : json.data.totalPages,
-          );
-        } else {
+            // 10명 단위로 클라이언트 페이징 계산
+            const ITEMS_PER_PAGE = 10;
+            const totalPages = Math.ceil(mappedData.length / ITEMS_PER_PAGE);
+            setAdminTotalPagesState(totalPages === 0 ? 1 : totalPages);
+
+            const startIndex = (page - 1) * ITEMS_PER_PAGE;
+            const endIndex = startIndex + ITEMS_PER_PAGE;
+            setAdminMembersList(mappedData.slice(startIndex, endIndex));
+          } else {
+            setAdminMembersList([]);
+            setAdminTotalPagesState(1);
+          }
+        })
+        .catch((err) => {
+          console.error("관리자 소원 검색 에러:", err);
           setAdminMembersList([]);
           setAdminTotalPagesState(1);
-        }
-      })
-      .catch((err) => {
-        console.error("관리자 소원 조회 에러:", err);
-        setAdminMembersList([]);
-        setAdminTotalPagesState(1);
-      });
+        });
+    } else {
+      // 검색어가 없을 경우 기존 페이징 전체 조회 API 호출
+      const pageParam = page - 1; // Spring Boot(Pageable)는 기본적으로 0-based page 사용
+      const url = `/admin/members?page=${pageParam}&size=10`;
+
+      fetch(url)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data) {
+            const mappedData = json.data.content.map((r) => ({
+              id: r.memberId,
+              pin: r.memberCode || "",
+              name: r.name,
+              image: r.profileImagePath || "/images/profile.png",
+              department: r.joinDepartmentName || "미배정",
+              deptHistory: [], // 필요 시 이력 추가
+            }));
+            setAdminMembersList(mappedData);
+            setAdminTotalPagesState(
+              json.data.totalPages === 0 ? 1 : json.data.totalPages,
+            );
+          } else {
+            setAdminMembersList([]);
+            setAdminTotalPagesState(1);
+          }
+        })
+        .catch((err) => {
+          console.error("관리자 소원 조회 에러:", err);
+          setAdminMembersList([]);
+          setAdminTotalPagesState(1);
+        });
+    }
   };
 
   // 부서 목록 클라이언트 측 필터링 및 페이지네이션
@@ -1155,6 +1204,89 @@ function App() {
               />
             ))}
           </div>
+
+          {/* 좌측 하단 슬라이드 컨트롤 버튼 */}
+          <div
+            className="slider-controls"
+            style={{
+              opacity: currentPageType === "residents" ? 1 : 0,
+              visibility:
+                currentPageType === "residents" ? "visible" : "hidden",
+            }}
+          >
+            <button
+              className="slider-control-btn"
+              style={{ fontSize: "1.2rem", letterSpacing: "-2px" }}
+              onClick={() => {
+                setPrevIndex(currentIndex);
+                setCurrentIndex(
+                  (prev) => (prev - 1 + sliderPagesLength) % sliderPagesLength,
+                );
+              }}
+            >
+              ◀◀
+            </button>
+            <button
+              className="slider-control-btn"
+              style={{ fontSize: "2.2rem", position: "relative", top: "-3px" }}
+              onClick={() => setIsPaused((prev) => !prev)}
+            >
+              {isPaused ? "▶" : "⏸"}
+            </button>
+            <button
+              className="slider-control-btn"
+              style={{ fontSize: "1.2rem", letterSpacing: "-2px" }}
+              onClick={() => {
+                setPrevIndex(currentIndex);
+                setCurrentIndex((prev) => (prev + 1) % sliderPagesLength);
+              }}
+            >
+              ▶▶
+            </button>
+
+            {/* 연도 이동 커스텀 드롭다운 (위로 열림) */}
+            <div className="slider-year-select-container">
+              {isYearSelectOpen && (
+                <div
+                  className="slider-year-select-overlay"
+                  onClick={() => setIsYearSelectOpen(false)}
+                />
+              )}
+              <button
+                className="slider-year-select-btn"
+                onClick={() => setIsYearSelectOpen((prev) => !prev)}
+              >
+                <span>{sliderPages[currentIndex]?.year || ""}년</span>
+                <span style={{ fontSize: "0.8em", opacity: 0.8 }}>
+                  {isYearSelectOpen ? "▼" : "▲"}
+                </span>
+              </button>
+
+              {isYearSelectOpen && (
+                <ul className="slider-year-dropdown">
+                  {activeYears.map((year) => (
+                    <li
+                      key={year}
+                      className="slider-year-dropdown-item"
+                      onClick={() => {
+                        const targetIndex = sliderPages.findIndex(
+                          (page) =>
+                            page.type === "residents" && page.year === year,
+                        );
+                        if (targetIndex !== -1) {
+                          setPrevIndex(currentIndex);
+                          setCurrentIndex(targetIndex);
+                        }
+                        setIsYearSelectOpen(false);
+                      }}
+                    >
+                      {year}년
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </div>
       ) : currentView === "search" ? (
         <div className="search-wrapper">
@@ -1347,7 +1479,7 @@ function App() {
             <div className="admin-list-search">
               <input
                 type="text"
-                placeholder="소원 이름 또는 고유번호 검색..."
+                placeholder="소원 이름으로 검색..."
                 value={adminSearchValue}
                 onChange={(e) => {
                   setAdminSearchValue(e.target.value);
@@ -1474,9 +1606,14 @@ function App() {
             <div className="admin-pagination">
               {(() => {
                 const pageGroupSize = 10;
-                const currentGroup = Math.ceil(adminCurrentPage / pageGroupSize);
+                const currentGroup = Math.ceil(
+                  adminCurrentPage / pageGroupSize,
+                );
                 const startPage = (currentGroup - 1) * pageGroupSize + 1;
-                const endPage = Math.min(startPage + pageGroupSize - 1, adminTotalPagesState);
+                const endPage = Math.min(
+                  startPage + pageGroupSize - 1,
+                  adminTotalPagesState,
+                );
 
                 const pages = [];
                 for (let i = startPage; i <= endPage; i++) {
@@ -1678,7 +1815,10 @@ function App() {
                 const pageGroupSize = 10;
                 const currentGroup = Math.ceil(deptCurrentPage / pageGroupSize);
                 const startPage = (currentGroup - 1) * pageGroupSize + 1;
-                const endPage = Math.min(startPage + pageGroupSize - 1, deptTotalPages);
+                const endPage = Math.min(
+                  startPage + pageGroupSize - 1,
+                  deptTotalPages,
+                );
 
                 const pages = [];
                 for (let i = startPage; i <= endPage; i++) {
@@ -2083,7 +2223,7 @@ function App() {
                                   setIsDeptSearchModalOpen(true);
                                 }}
                                 style={{
-                                  flex: 1,
+                                  flex: 1.8 /* 부서명 칸 너비 확대 (글자가 덜 잘리도록) */,
                                   backgroundColor: "#f5f5f5",
                                   cursor: "pointer",
                                 }}
@@ -2470,6 +2610,60 @@ function App() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3>부서 검색</h3>
+            {/* 기존 부서명 표시 영역 추가 */}
+            {(() => {
+              let prevDeptName = "";
+              if (currentView === "admin-member-add") {
+                if (deptSearchTargetIndex === -1 && memberAddJoinDept) {
+                  prevDeptName = `[${memberAddJoinDept.deptCd}] ${memberAddJoinDept.deptName}`;
+                } else if (
+                  deptSearchTargetIndex >= 0 &&
+                  memberAddHistories[deptSearchTargetIndex]
+                ) {
+                  const h = memberAddHistories[deptSearchTargetIndex];
+                  prevDeptName = h.deptCode
+                    ? `[${h.deptCode}] ${h.deptName}`
+                    : h.deptName || "";
+                }
+              } else if (
+                currentView === "admin-list" &&
+                adminSelectedResident
+              ) {
+                if (
+                  deptSearchTargetIndex >= 0 &&
+                  adminSelectedResident.deptHistory[deptSearchTargetIndex]
+                ) {
+                  const h =
+                    adminSelectedResident.deptHistory[deptSearchTargetIndex];
+                  prevDeptName = h.deptCode
+                    ? `[${h.deptCode}] ${h.deptName}`
+                    : h.deptName || "";
+                }
+              }
+
+              if (prevDeptName) {
+                return (
+                  <div
+                    style={{
+                      marginBottom: "1rem",
+                      fontSize: "1.4rem",
+                      color: "#555",
+                      backgroundColor: "#f9f9f9",
+                      padding: "0.8rem 1rem",
+                      borderRadius: "8px",
+                      border: "1px solid #eee",
+                      wordBreak: "keep-all",
+                    }}
+                  >
+                    <strong style={{ color: "#333", marginRight: "0.5rem" }}>
+                      기존 부서명:
+                    </strong>
+                    {prevDeptName}
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <input
               type="text"
               placeholder="부서명 또는 부서코드 검색..."
@@ -2556,11 +2750,11 @@ function App() {
       )}
 
       {/* 고유번호 입력 팝업창 (모달) */}
-      {showPinModal && selectedResident && (
+      {showPinModal && pendingResident && (
         <div className="pin-modal-overlay">
           <div className="pin-modal">
             <h2>고유번호 입력</h2>
-            <p>{selectedResident.name} 님의 고유번호를 입력해주세요.</p>
+            <p>{pendingResident.name} 님의 고유번호를 입력해주세요.</p>
             <div className="pin-display">
               {pinInput ? "●".repeat(pinInput.length) : "번호를 입력하세요"}
             </div>

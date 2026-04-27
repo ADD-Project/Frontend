@@ -172,6 +172,126 @@ textarea {
   transform: scale(1.2); /* 현재 페이지 동그라미를 약간 더 크게 강조 */
 }
 
+/* --- 슬라이더 컨트롤 버튼 (좌측 하단) --- */
+.slider-controls {
+  position: absolute;
+  bottom: 3rem; /* 동그라미 페이지네이션과 동일한 높이로 설정 */
+  left: 4rem;
+  z-index: 100;
+  display: flex;
+  gap: 1.2rem;
+  align-items: center;
+  transition:
+    opacity 1s ease-in-out,
+    visibility 1s ease-in-out;
+}
+
+.slider-control-btn {
+  width: 50px;
+  height: 50px;
+  background-color: transparent;
+  color: #ffffff;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8); /* 배경이 사라졌으므로 아이콘 가독성을 위해 그림자 추가 */
+}
+
+.slider-control-btn:hover {
+  transform: scale(1.1);
+}
+
+.slider-control-btn:active {
+  transform: scale(0.95);
+}
+
+/* --- 슬라이더 연도 선택 커스텀 드롭다운 --- */
+.slider-year-select-container {
+  position: relative;
+  margin-left: 1rem;
+}
+
+.slider-year-select-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 105; /* 목록 외 빈 공간 클릭 시 닫히도록 화면 덮음 */
+}
+
+.slider-year-select-btn {
+  position: relative;
+  z-index: 110;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.4rem 1rem; /* 세로 두께를 얇게 조절 */
+  width: 140px; /* 가로 길이를 고정으로 더 길게 늘림 */
+  border-radius: 8px;
+  font-size: 1.2rem;
+  font-family: inherit;
+  font-weight: 400;
+  cursor: pointer;
+  outline: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.slider-year-dropdown {
+  position: absolute;
+  bottom: calc(100% + 10px); /* 목록이 무조건 버튼 위로 열리도록 설정 */
+  left: 0;
+  width: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 110;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.5) transparent;
+}
+
+.slider-year-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+.slider-year-dropdown::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+}
+
+.slider-year-dropdown-item {
+  padding: 0.8rem 1rem;
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 400;
+  text-align: center;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background-color 0.2s ease;
+}
+
+.slider-year-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.slider-year-dropdown-item:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
 /* 텍스트 및 그리드 스타일링 */
 .year-title {
   position: absolute;
