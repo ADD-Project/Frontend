@@ -95,9 +95,6 @@ function App() {
   const [isLangKo, setIsLangKo] = useState(true); // 한/영 상태
   const [isShift, setIsShift] = useState(false); // Shift 상태 추가
   const [selectedResident, setSelectedResident] = useState(null); // 클릭한 회원 객체
-  const [pendingResident, setPendingResident] = useState(null); // 고유번호 인증 대기 중인 회원 객체
-  const [showPinModal, setShowPinModal] = useState(false); // 고유번호 팝업창 표시 여부
-  const [pinInput, setPinInput] = useState(""); // 입력된 고유번호
   const [showAdminModal, setShowAdminModal] = useState(false); // 관리자 로그인 팝업창
   const [adminPinInput, setAdminPinInput] = useState(""); // 입력된 관리자 비밀번호
   const [adminSearchValue, setAdminSearchValue] = useState(""); // 관리자 회원 조회 검색어
@@ -136,8 +133,9 @@ function App() {
   const [isIdleModalOpen, setIsIdleModalOpen] = useState(false); // 무반응(유휴) 알림 팝업창 표시 여부
   const [idleCountdown, setIdleCountdown] = useState(5); // 무반응 알림 팝업 카운트다운 숫자
   const [dialogConfig, setDialogConfig] = useState(null); // 커스텀 알림/확인창 상태
-  const [preResidentImages, setPreResidentImages] = useState([]); // 시작 전 이미지 목록
-  const [postResidentVideos, setPostResidentVideos] = useState([]); // 끝난 후 비디오 목록
+  const [mediaFiles, setMediaFiles] = useState([]); // 넘버링된 미디어 파일 목록
+  const [yearPopupPage, setYearPopupPage] = useState(0); // 연도 검색 팝업 페이지 상태
+  const [isInitialLoading, setIsInitialLoading] = useState(true); // 초기 데이터 로딩 상태
 
   // 커스텀 알림창 함수 (전체화면 해제 방지)
   const showAlert = (message, onConfirm = null) => {
@@ -177,7 +175,7 @@ function App() {
 
   // 홈 화면 슬라이더 데이터를 서버에서 최신으로 다시 불러오는 함수
   const fetchSliderData = () => {
-    fetch("/members/admission-years/range", {
+    return fetch("/members/admission-years/range", {
       method: "GET",
     })
       .then((res) => res.json())
@@ -196,8 +194,8 @@ function App() {
         );
         setYearsList(fetchedYearsList);
 
-        fetchedYearsList.forEach((year) => {
-          fetch(`/members/admission-years/${year}`, {
+        const yearPromises = fetchedYearsList.map((year) => {
+          return fetch(`/members/admission-years/${year}`, {
             method: "GET",
           })
             .then((res) => res.json())
@@ -224,6 +222,7 @@ function App() {
               setResidentsByYear((prev) => ({ ...prev, [year]: [] }));
             });
         });
+        return Promise.all(yearPromises);
       })
       .catch((err) => {
         console.error("연도 범위 호출 에러:", err);
@@ -232,32 +231,34 @@ function App() {
 
   // 미디어 파일(이미지/동영상) 목록을 서버에서 불러오는 함수
   const fetchMediaFiles = () => {
-    fetch("/api/media/pages")
+    return fetch("/api/media/pages")
       .then((res) => {
         if (!res.ok) throw new Error("미디어 API 응답 에러");
         return res.json();
       })
       .then((files) => {
-        const preImages = [];
-        const postVideos = [];
-        files.forEach((fileName) => {
-          const url = `/images/pages/${fileName}?v=${cacheBuster}`;
-          if (/\.(mp4|webm|ogg|mov)$/i.test(fileName)) {
-            postVideos.push(url);
-          } else {
-            preImages.push(url);
-          }
-        });
-        setPreResidentImages(preImages);
-        setPostResidentVideos(postVideos);
+        const mediaList = files
+          .map((fileName) => {
+            const match = fileName.match(/^\d+/);
+            const num = match ? parseInt(match[0], 10) : 999;
+            const isVideo = /\.(mp4|webm|ogg|mov)$/i.test(fileName);
+            return {
+              type: isVideo ? "video" : "image",
+              src: `/images/pages/${fileName}?v=${cacheBuster}`,
+              num: num,
+            };
+          })
+          .sort((a, b) => a.num - b.num);
+        setMediaFiles(mediaList);
       })
       .catch((err) => console.error("미디어 파일 로드 에러:", err));
   };
 
   // 컴포넌트 마운트 시 최초 데이터 로드
   useEffect(() => {
-    fetchSliderData();
-    fetchMediaFiles();
+    Promise.all([fetchSliderData(), fetchMediaFiles()]).finally(() => {
+      setIsInitialLoading(false);
+    });
   }, []);
 
   // 데이터가 존재하는 연도만 필터링 (초기 로딩 시 화면 터짐 방지를 위해 임시로 올해 연도를 노출)
@@ -269,36 +270,53 @@ function App() {
   const ITEMS_PER_PAGE = 24;
   const sliderPages = [];
 
-  // 1. 설정된 이미지들을 순서대로 추가
-  preResidentImages.forEach((src) => {
-    sliderPages.push({ type: "image", src: src });
-  });
-
-  // 2. 연도별 임용자 데이터 추가
-  if (activeYears.length === 0) {
-    sliderPages.push({
-      type: "residents",
-      year: CURRENT_YEAR,
-      residents: null,
-      pageIndex: 0,
-    });
-  } else {
-    activeYears.forEach((year) => {
-      const yearResidents = residentsByYear[year];
-      for (let i = 0; i < yearResidents.length; i += ITEMS_PER_PAGE) {
-        sliderPages.push({
-          type: "residents",
-          year: year,
-          pageIndex: i / ITEMS_PER_PAGE,
-          residents: yearResidents.slice(i, i + ITEMS_PER_PAGE),
-        });
-      }
-    });
+  // 1. 임용자 블록이 들어갈 순서(빈 숫자) 찾기
+  let residentPosition = 1;
+  for (let i = 0; i < mediaFiles.length; i++) {
+    if (mediaFiles[i].num > residentPosition) {
+      break; // 중간에 이빨이 빠진 숫자를 찾음
+    }
+    if (mediaFiles[i].num === residentPosition) {
+      residentPosition++;
+    }
   }
 
-  // 3. 폴더에서 스캔된 모든 동영상을 마지막에 순서대로 추가
-  postResidentVideos.forEach((src) => {
-    sliderPages.push({ type: "video", src: src });
+  // 2. 통합 블록 배열 만들기 (미디어 + 임용자 그룹)
+  const combinedBlocks = [...mediaFiles];
+  combinedBlocks.push({
+    type: "residentsGroup",
+    num: residentPosition,
+  });
+
+  // 3. 순서(숫자)대로 정렬
+  combinedBlocks.sort((a, b) => a.num - b.num);
+
+  // 4. 순서대로 슬라이드 페이지에 전개
+  combinedBlocks.forEach((block) => {
+    if (block.type === "image" || block.type === "video") {
+      sliderPages.push({ type: block.type, src: block.src });
+    } else if (block.type === "residentsGroup") {
+      if (activeYears.length === 0) {
+        sliderPages.push({
+          type: "residents",
+          year: CURRENT_YEAR,
+          residents: null,
+          pageIndex: 0,
+        });
+      } else {
+        activeYears.forEach((year) => {
+          const yearResidents = residentsByYear[year];
+          for (let i = 0; i < yearResidents.length; i += ITEMS_PER_PAGE) {
+            sliderPages.push({
+              type: "residents",
+              year: year,
+              pageIndex: i / ITEMS_PER_PAGE,
+              residents: yearResidents.slice(i, i + ITEMS_PER_PAGE),
+            });
+          }
+        });
+      }
+    }
   });
 
   const sliderPagesLength = sliderPages.length;
@@ -434,6 +452,34 @@ function App() {
     };
   }, [currentView, isIdleModalOpen, isPaused, sliderPagesLength]);
 
+  // 연도 검색 팝업 무반응(1분) 시 자동 닫기
+  useEffect(() => {
+    let timeoutId;
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setIsYearSelectOpen(false);
+        setYearPopupPage(0);
+      }, 60000); // 1분 (60,000ms)
+    };
+
+    if (isYearSelectOpen) {
+      resetTimer();
+      window.addEventListener("mousemove", resetTimer);
+      window.addEventListener("keydown", resetTimer);
+      window.addEventListener("touchstart", resetTimer);
+      window.addEventListener("click", resetTimer);
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener("mousemove", resetTimer);
+      window.removeEventListener("keydown", resetTimer);
+      window.removeEventListener("touchstart", resetTimer);
+      window.removeEventListener("click", resetTimer);
+    };
+  }, [isYearSelectOpen]);
+
   // 팝업 표시 중 1초 단위 카운트다운 및 홈 화면 이동 처리
   useEffect(() => {
     let countdownInterval;
@@ -448,7 +494,6 @@ function App() {
             setIsPaused(false);
             setIsYearSelectOpen(false);
             setIsKeyboardOpen(false);
-            setShowPinModal(false);
             setShowAdminModal(false);
             setAdminSelectedResident(null);
             setAdminCurrentPassword("");
@@ -598,63 +643,35 @@ function App() {
   // 프로필 카드 클릭 시 팝업 띄우기
   const handleResidentClick = (resident) => {
     console.log("선택된 소원 데이터 (F12에서 확인):", resident); // 백엔드에서 전달받은 실제 고유번호(pin) 확인용
-    setPendingResident(resident);
-    setPinInput("");
-    setShowPinModal(true);
-  };
-
-  // 고유번호 키패드 입력 핸들러
-  const handlePinKey = (key) => {
-    if (key === "취소") {
-      setShowPinModal(false);
-      setPinInput("");
-      setPendingResident(null);
-    } else if (key === "지우기") {
-      setPinInput((prev) => prev.slice(0, -1));
-    } else if (key === "확인") {
-      if (pinInput === pendingResident.pin) {
-        // 번호 일치 시 API 호출하여 상세 정보 가져오기
-        fetch(`/member/${pendingResident.id}`)
-          .then((res) => res.json())
-          .then((json) => {
-            if (json.success && json.data) {
-              const detailData = json.data;
-              setSelectedResident({
-                ...pendingResident,
-                date: detailData.joinDate,
-                department: detailData.joinDepartmentName,
-                coworkers: detailData.colleaguesAtJoin
-                  ? detailData.colleaguesAtJoin.map((cw) => ({
-                      id: cw.memberId,
-                      name: cw.name,
-                      image: cw.profileImagePath || "/images/profile.png",
-                      pin: cw.memberCode ? String(cw.memberCode) : "", // 부서원도 고유번호를 가지도록 추가
-                    }))
-                  : [],
-              });
-              setShowPinModal(false);
-              setPinInput("");
-              setCurrentView("detail");
-              setIsKeyboardOpen(false); // 가상 키보드 닫기
-            } else {
-              showAlert("소원 상세 정보를 불러오지 못했습니다.");
-              setPinInput("");
-            }
-          })
-          .catch((err) => {
-            console.error("상세 정보 호출 에러:", err);
-            showAlert("상세 정보를 불러오는 중 오류가 발생했습니다.");
-            setPinInput("");
+    // API 호출하여 상세 정보 가져오기
+    fetch(`/member/${resident.id}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && json.data) {
+          const detailData = json.data;
+          setSelectedResident({
+            ...resident,
+            date: detailData.joinDate,
+            department: detailData.joinDepartmentName,
+            coworkers: detailData.colleaguesAtJoin
+              ? detailData.colleaguesAtJoin.map((cw) => ({
+                  id: cw.memberId,
+                  name: cw.name,
+                  image: cw.profileImagePath || "/images/profile.png",
+                  pin: cw.memberCode ? String(cw.memberCode) : "", // 부서원도 고유번호를 가지도록 추가
+                }))
+              : [],
           });
-      } else {
-        showAlert("고유번호가 일치하지 않습니다.");
-        setPinInput("");
-      }
-    } else {
-      if (pinInput.length < 8) {
-        setPinInput((prev) => prev + key);
-      }
-    }
+          setCurrentView("detail");
+          setIsKeyboardOpen(false); // 가상 키보드 닫기
+        } else {
+          showAlert("소원 상세 정보를 불러오지 못했습니다.");
+        }
+      })
+      .catch((err) => {
+        console.error("상세 정보 호출 에러:", err);
+        showAlert("상세 정보를 불러오는 중 오류가 발생했습니다.");
+      });
   };
 
   // 선택된 회원 삭제 핸들러
@@ -1060,7 +1077,7 @@ function App() {
   return (
     <div className="app-container" onContextMenu={(e) => e.preventDefault()}>
       {/* 우측 상단 고정 로고 (연도별 임용자 슬라이드에서만 부드럽게 표시) */}
-      {currentView === "slider" && (
+      {currentView === "slider" && !isInitialLoading && (
         <div
           className="top-right-container"
           style={{
@@ -1244,49 +1261,82 @@ function App() {
               ▶▶
             </button>
 
-            {/* 연도 이동 커스텀 드롭다운 (위로 열림) */}
-            <div className="slider-year-select-container">
-              {isYearSelectOpen && (
-                <div
-                  className="slider-year-select-overlay"
-                  onClick={() => setIsYearSelectOpen(false)}
-                />
-              )}
-              <button
-                className="slider-year-select-btn"
-                onClick={() => setIsYearSelectOpen((prev) => !prev)}
-              >
-                <span>{sliderPages[currentIndex]?.year || ""}년</span>
-                <span style={{ fontSize: "0.8em", opacity: 0.8 }}>
-                  {isYearSelectOpen ? "▼" : "▲"}
-                </span>
-              </button>
-
-              {isYearSelectOpen && (
-                <ul className="slider-year-dropdown">
-                  {activeYears.map((year) => (
-                    <li
-                      key={year}
-                      className="slider-year-dropdown-item"
-                      onClick={() => {
-                        const targetIndex = sliderPages.findIndex(
-                          (page) =>
-                            page.type === "residents" && page.year === year,
-                        );
-                        if (targetIndex !== -1) {
-                          setPrevIndex(currentIndex);
-                          setCurrentIndex(targetIndex);
-                        }
-                        setIsYearSelectOpen(false);
-                      }}
-                    >
-                      {year}년
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            {/* 연도 검색 팝업 버튼 */}
+            <button
+              className="slider-year-search-btn"
+              onClick={() => {
+                setYearPopupPage(0);
+                setIsYearSelectOpen(true);
+              }}
+            >
+              연도검색
+            </button>
           </div>
+
+          {/* 연도 검색 팝업 모달 */}
+          {isYearSelectOpen && (
+            <div
+              className="year-search-modal-overlay"
+              onClick={() => setIsYearSelectOpen(false)}
+            >
+              <div
+                className="year-search-modal"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  className="year-search-close-btn"
+                  onClick={() => setIsYearSelectOpen(false)}
+                >
+                  ✕
+                </button>
+                <h2>연도 검색</h2>
+                <div className="year-search-grid">
+                  {activeYears
+                    .slice(yearPopupPage * 50, (yearPopupPage + 1) * 50)
+                    .map((year) => (
+                      <button
+                        key={year}
+                        className="year-search-item"
+                        onClick={() => {
+                          const targetIndex = sliderPages.findIndex(
+                            (page) =>
+                              page.type === "residents" && page.year === year,
+                          );
+                          if (targetIndex !== -1) {
+                            setPrevIndex(currentIndex);
+                            setCurrentIndex(targetIndex);
+                          }
+                          setIsYearSelectOpen(false);
+                        }}
+                      >
+                        {year}년
+                      </button>
+                    ))}
+                </div>
+                {Math.ceil(activeYears.length / 50) > 1 && (
+                  <div className="year-search-pagination">
+                    <button
+                      disabled={yearPopupPage === 0}
+                      onClick={() => setYearPopupPage((p) => p - 1)}
+                    >
+                      ◀ 이전
+                    </button>
+                    <span>
+                      {yearPopupPage + 1} / {Math.ceil(activeYears.length / 50)}
+                    </span>
+                    <button
+                      disabled={
+                        yearPopupPage === Math.ceil(activeYears.length / 50) - 1
+                      }
+                      onClick={() => setYearPopupPage((p) => p + 1)}
+                    >
+                      다음 ▶
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       ) : currentView === "search" ? (
         <div className="search-wrapper">
@@ -2340,29 +2390,51 @@ function App() {
                       });
                   } else {
                     // 일반 회원 정보 수정 로직 (PUT API 호출)
+                    // 백엔드의 '전체 동기화(Full Sync)' 요구사항에 맞게,
+                    // 유지되어야 하는 기존 이력과 새로 추가된 이력을 모두 포함하여 하나의 배열(List)로 생성합니다.
+                    const finalHistories = adminSelectedResident.deptHistory
+                      .filter((h) => h.deptCode && h.startDate) // 빈 값은 안전하게 제외
+                      .map((h) => ({
+                        deptCode: h.deptCode,
+                        deptName: h.deptName,
+                        startDate: h.startDate,
+                      }));
+
                     const putPayload = {
                       memberCode: adminSelectedResident.pin || "",
                       name: adminSelectedResident.name || "",
-                      profileImagePath:
-                        adminSelectedResident.image || "/images/profile.png",
-                      histories: adminSelectedResident.deptHistory
-                        .filter((h) => h.deptCode && h.startDate) // 빈 값 제외
-                        .map((h) => ({
-                          deptCode: h.deptCode,
-                          deptName: h.deptName,
-                          startDate: h.startDate,
-                        })),
+                      histories: finalHistories,
                     };
+
+                    // 백엔드 개발자 확인용: 프론트가 '수정된 최종본 전체'를 보내고 있음을 증명하는 로그
+                    console.log(
+                      "📌 [요청 데이터] 백엔드(Full Sync)로 전송하는 전체 이력:",
+                      JSON.stringify(putPayload, null, 2),
+                    );
 
                     fetch(`/members/${adminSelectedResident.id}`, {
                       method: "PUT",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(putPayload),
                     })
-                      .then((res) => res.json())
-                      .then((json) => {
-                        if (json.success) {
-                          showAlert("소원 정보가 성공적으로 수정되었습니다.");
+                      .then(async (res) => {
+                        try {
+                          const json = await res.json();
+                          // 상태 코드가 400 등 에러라도 백엔드 커스텀 JSON 응답이 있다면 파싱하여 반환
+                          return { ok: res.ok, json };
+                        } catch (e) {
+                          throw new Error(
+                            `서버 응답 오류 (상태 코드: ${res.status})`,
+                          );
+                        }
+                      })
+                      .then(({ ok, json }) => {
+                        // 백엔드의 success 필드 혹은 HTTP Status OK에 따라 성공/실패 분기
+                        if (ok && json.success !== false) {
+                          showAlert(
+                            json.message ||
+                              "소원 정보가 성공적으로 수정되었습니다.",
+                          );
                           setAdminSelectedResident(null);
                           setIsKeyboardOpen(false);
                           setFocusedInput(null);
@@ -2372,6 +2444,7 @@ function App() {
                           ); // 수정 후 목록 새로고침
                           fetchSliderData(); // 슬라이더 데이터 최신화
                         } else {
+                          // 부서명 불일치 등 400 에러와 함께 보낸 백엔드의 상세 메시지를 그대로 얼럿으로 띄움
                           showAlert(
                             json.message || "정보 수정에 실패했습니다.",
                           );
@@ -2745,49 +2818,6 @@ function App() {
                 닫기
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 고유번호 입력 팝업창 (모달) */}
-      {showPinModal && pendingResident && (
-        <div className="pin-modal-overlay">
-          <div className="pin-modal">
-            <h2>고유번호 입력</h2>
-            <p>{pendingResident.name} 님의 고유번호를 입력해주세요.</p>
-            <div className="pin-display">
-              {pinInput ? "●".repeat(pinInput.length) : "번호를 입력하세요"}
-            </div>
-            <div className="pin-keyboard">
-              {[
-                "1",
-                "2",
-                "3",
-                "4",
-                "5",
-                "6",
-                "7",
-                "8",
-                "9",
-                "취소",
-                "0",
-                "지우기",
-              ].map((key) => (
-                <button
-                  key={key}
-                  className={`pin-key-btn ${["취소", "지우기"].includes(key) ? "action-key" : ""}`}
-                  onClick={() => handlePinKey(key)}
-                >
-                  {key}
-                </button>
-              ))}
-            </div>
-            <button
-              className="pin-confirm-btn"
-              onClick={() => handlePinKey("확인")}
-            >
-              확인
-            </button>
           </div>
         </div>
       )}

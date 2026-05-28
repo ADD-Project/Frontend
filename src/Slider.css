@@ -140,7 +140,7 @@ textarea {
 /* --- 슬라이더 페이지네이션 (하단 동그라미) --- */
 .slider-pagination {
   position: absolute;
-  bottom: 3rem; /* 화면 맨 아래에서부터의 여백 */
+  bottom: 2rem; /* 화면 맨 아래에서부터의 여백 */
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -172,11 +172,12 @@ textarea {
   transform: scale(1.2); /* 현재 페이지 동그라미를 약간 더 크게 강조 */
 }
 
-/* --- 슬라이더 컨트롤 버튼 (좌측 하단) --- */
+/* --- 슬라이더 컨트롤 버튼 --- */
 .slider-controls {
   position: absolute;
-  bottom: 3rem; /* 동그라미 페이지네이션과 동일한 높이로 설정 */
-  left: 4rem;
+  bottom: 4.5rem; /* 동그라미 페이지네이션보다 위쪽으로 배치 */
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 100;
   display: flex;
   gap: 1.2rem;
@@ -209,95 +210,155 @@ textarea {
   transform: scale(0.95);
 }
 
-/* --- 슬라이더 연도 선택 커스텀 드롭다운 --- */
-.slider-year-select-container {
-  position: relative;
-  margin-left: 1rem;
+.slider-year-search-btn {
+  background-color: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.5rem 1.2rem;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  transition:
+    background-color 0.2s,
+    transform 0.1s;
+  position: absolute;
+  bottom: calc(100% + 1rem); /* 멈춤/재생 컨트롤 버튼들 바로 위쪽으로 배치 */
+  left: 50%;
+  transform: translateX(-50%); /* 화면 한가운데 정렬 */
+  white-space: nowrap; /* 버튼 텍스트가 두 줄로 쪼개지지 않도록 방지 */
+  z-index: 110;
 }
 
-.slider-year-select-overlay {
+.slider-year-search-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.slider-year-search-btn:active {
+  transform: translateX(-50%) scale(0.95); /* 가운데 정렬 유지하며 클릭 효과 적용 */
+}
+
+/* --- 연도 검색 팝업 --- */
+.year-search-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 105; /* 목록 외 빈 공간 클릭 시 닫히도록 화면 덮음 */
-}
-
-.slider-year-select-btn {
-  position: relative;
-  z-index: 110;
-  background-color: rgba(0, 0, 0, 0.6);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 0.4rem 1rem; /* 세로 두께를 얇게 조절 */
-  width: 140px; /* 가로 길이를 고정으로 더 길게 늘림 */
-  border-radius: 8px;
-  font-size: 1.2rem;
-  font-family: inherit;
-  font-weight: 400;
-  cursor: pointer;
-  outline: none;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.6); /* 뒷배경 어둡게 */
+  z-index: 2000;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: center;
 }
 
-.slider-year-dropdown {
-  position: absolute;
-  bottom: calc(100% + 10px); /* 목록이 무조건 버튼 위로 열리도록 설정 */
-  left: 0;
-  width: 100%;
-  background-color: rgba(0, 0, 0, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  max-height: 250px;
-  overflow-y: auto;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+.year-search-modal {
+  width: 66.6vw; /* 전체 화면의 2/3 */
+  height: 66.6vh;
+  background-color: rgba(50, 50, 50, 0.9); /* 어두운 회색, 살짝 투명하게 */
+  border-radius: 20px;
+  padding: 3rem 4rem;
   display: flex;
   flex-direction: column;
-  z-index: 110;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.5) transparent;
+  align-items: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  position: relative;
+  color: #ffffff; /* 흰 글씨 */
 }
 
-.slider-year-dropdown::-webkit-scrollbar {
-  width: 6px;
-}
-.slider-year-dropdown::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.5);
-  border-radius: 4px;
-}
-
-.slider-year-dropdown-item {
-  padding: 0.8rem 1rem;
+.year-search-modal h2 {
+  font-size: 2.5rem;
+  margin: 0 0 2rem 0;
   color: #ffffff;
-  font-size: 1.2rem;
-  font-weight: 400;
-  text-align: center;
+}
+
+.year-search-close-btn {
+  position: absolute;
+  top: 2rem;
+  right: 2rem;
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 2.5rem;
   cursor: pointer;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  transition: background-color 0.2s ease;
+  transition: transform 0.2s;
 }
 
-.slider-year-dropdown-item:last-child {
-  border-bottom: none;
+.year-search-close-btn:hover {
+  transform: scale(1.1);
 }
 
-.slider-year-dropdown-item:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+.year-search-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr); /* 10개씩 */
+  grid-template-rows: repeat(5, 1fr); /* 5줄 */
+  gap: 1rem;
+  width: 100%;
+  flex: 1; /* 남은 공간 차지 */
+}
+
+.year-search-item {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  font-size: 1.3rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.year-search-item:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.year-search-item:active {
+  transform: scale(0.95);
+}
+
+.year-search-pagination {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  margin-top: 2rem;
+  font-size: 1.5rem;
+}
+
+.year-search-pagination button {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: background-color 0.2s;
+}
+
+.year-search-pagination button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.year-search-pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* 텍스트 및 그리드 스타일링 */
 .year-title {
   position: absolute;
-  top: 3rem;
-  left: 4rem;
-  font-size: 3rem; /* 글자 크기 축소 */
+  top: 6vh; /* 화면 높이에 비례하도록 설정 */
+  left: 5vw; /* 화면 너비에 비례하도록 설정 */
+  font-size: 4.5vh; /* 해상도 변경 시에도 비율 유지 */
   font-weight: 700; /* 다시 볼드체로 굵게 변경 */
   margin: 0;
   text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.4); /* 그림자를 더 옅게 변경 */
@@ -306,14 +367,15 @@ textarea {
 .resident-list {
   display: grid;
   grid-template-columns: repeat(8, 1fr); /* 8명씩 동일한 간격으로 배치 */
-  grid-template-rows: repeat(3, auto); /* 3줄 배치 */
-  gap: 1.5rem 1rem; /* 위아래 간격을 줄여 하단 겹침 방지 (3rem -> 1.5rem), 양옆 1rem 간격 */
-  justify-content: start;
+  grid-template-rows: repeat(3, 1fr); /* 3줄을 동일한 비율로 분배 */
+  gap: 0.5vh 0.5vw; /* 카드 사이 간격을 좁혀서 서로 더 가깝게 붙임 */
+  justify-content: center;
   justify-items: center; /* 그리드 셀 안에서 카드 가운데 정렬 */
-  align-content: start; /* 상단부터 차례대로 채우기 */
-  width: 100%;
-  max-width: 1800px; /* 전체 너비를 넓게 사용하여 8개가 들어가도록 설정 */
-  margin-top: 8rem; /* 전체 목록을 위로 살짝 끌어올림 (10rem -> 8rem) */
+  align-items: center; /* 카드들을 셀 중앙에 배치 */
+  width: 70vw; /* 영역 너비를 줄여 이미지들을 가운데로 모음 */
+  max-width: none; /* 고정 크기 제한 해제 */
+  height: 55vh; /* 영역 높이를 줄여 위아래 여백을 넓히고 중앙으로 모음 */
+  margin-top: 16vh; /* 상단 여백을 늘려 리스트가 중앙 쪽에 안정적으로 위치하게 함 */
 }
 
 .resident-card {
@@ -330,14 +392,14 @@ textarea {
 }
 
 .resident-card img {
-  width: 140px; /* 8명을 한 화면에 여유롭게 배치하기 위해 축소 */
-  height: 186px; /* 3:4 비율 유지 */
+  width: 9vh; /* 프로필 카드 가로 크기 추가 축소 */
+  height: 12vh; /* 3:4 비율 유지하며 세로 크기 추가 축소 */
   border-radius: 12px; /* 약간 둥근 모서리 */
   object-fit: cover;
   object-position: center 15%; /* 사람 얼굴(위쪽) 위주로 자르도록 기준점 상향 조정 */
   border: 4px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
-  margin-bottom: 1rem; /* 사진과 이름 사이 여백 축소 */
+  margin-bottom: 1vh; /* 사진과 이름 사이 여백 비율 유지 */
   /* 저해상도 이미지가 억지로 늘어날 때 뿌옇게 번지는 것을 막고 최대한 선명하게 렌더링 */
   image-rendering: -webkit-optimize-contrast;
   image-rendering: high-quality;
@@ -345,18 +407,19 @@ textarea {
 
 .resident-name {
   color: #ffffff;
-  font-size: 1.5rem; /* 카드 크기에 맞춰 폰트 축소 */
+  font-size: 1.6vh; /* 카드 크기에 맞춰 이름 폰트 추가 축소 */
   font-weight: 600; /* 가독성을 위해 글씨를 약간 더 굵게 */
   text-shadow:
     2px 2px 8px rgba(0, 0, 0, 1),
     0 0 15px rgba(0, 0, 0, 0.8); /* 검은색 그림자를 더 진하고 넓게 겹쳐서 가독성 극대화 */
+  margin: 0;
 }
 
 /* 검색 결과 - 이름 아래 임용 연도 스타일 */
 .resident-year {
   color: #dddddd; /* 이름보다 살짝 어두운 밝은 회색 */
-  font-size: 1.1rem; /* 이름보다 작게 설정 */
-  margin: 0.3rem 0 0 0; /* 이름과의 간격 */
+  font-size: 1.1vh; /* 카드 크기에 맞춰 연도 폰트 추가 축소 */
+  margin: 0.5vh 0 0 0;
   font-weight: 500;
   text-shadow: 2px 2px 8px rgba(0, 0, 0, 1); /* 배경에 묻히지 않도록 그림자 추가 */
 }
@@ -493,20 +556,18 @@ textarea {
 
 /* --- 검색 결과 스타일 --- */
 .search-results {
-  margin-top: 3rem;
+  margin-top: 3vh;
   display: grid;
   grid-template-columns: repeat(8, 1fr); /* 왼쪽 상단부터 8명씩 배치 */
-  justify-content: start;
+  justify-content: center;
   justify-items: center;
   align-content: start;
-  gap: 3rem 1rem; /* 위아래 3rem, 양옆 1rem 간격 */
-  width: 100%;
-  max-width: 1800px; /* 8명이 넉넉히 들어가도록 전체 화면 너비 활용 */
-  max-height: calc(
-    100vh - 25rem
-  ); /* 검색창 등의 상단 여백 제외하고 스크롤 가능하도록 높이 제한 */
+  gap: 3vh 1vw; /* 간격 비율 유지 */
+  width: 90vw;
+  max-width: none;
+  max-height: 65vh; /* 검색창 등의 상단 여백 제외하고 스크롤 가능하도록 높이 제한 */
   overflow-y: auto;
-  padding: 1rem 1rem 10rem 1rem; /* 하단 여백을 넉넉히 주어 키보드에 가려지지 않게 함 */
+  padding: 1vh 1vw 10vh 1vw; /* 하단 여백 비율 유지 */
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
@@ -835,7 +896,7 @@ textarea {
   justify-content: flex-start;
   align-content: flex-start; /* 아이템들이 세로로 퍼지지 않고 위에서부터 차곡차곡 쌓이도록 설정 */
   overflow-y: auto; /* 부서원이 많아지면 이 박스 안에서만 세로 스크롤 생성 */
-  padding-bottom: 2rem; /* 맨 아랫줄 카드 그림자가 잘리지 않도록 여백 추가 */
+  padding: 1rem 1rem 2rem 1rem; /* 카드 호버(확대) 시 테두리와 이미지가 상/좌/우 영역에서 잘리지 않도록 여백 추가 */
   -ms-overflow-style: none; /* 스크롤바 숨김 (IE, Edge) */
   scrollbar-width: none; /* 스크롤바 숨김 (Firefox) */
 }
